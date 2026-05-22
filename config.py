@@ -14,20 +14,19 @@ class Config:
         self.LOGGER_ID = int(getenv("LOGGER_ID", 0))
         self.OWNER_ID = int(getenv("OWNER_ID", 0))
 
-        self.DURATION_LIMIT = int(getenv("DURATION_LIMIT", 60)) * 60
-        self.QUEUE_LIMIT = int(getenv("QUEUE_LIMIT", 20))
-        self.PLAYLIST_LIMIT = int(getenv("PLAYLIST_LIMIT", 20))
+        self.DURATION_LIMIT = int(getenv("DURATION_LIMIT", 240)) * 60   # 4 hours
+        self.QUEUE_LIMIT = int(getenv("QUEUE_LIMIT", 100))
+        self.PLAYLIST_LIMIT = int(getenv("PLAYLIST_LIMIT", 100))
 
         self.SESSION1 = getenv("SESSION", None)
         self.SESSION2 = getenv("SESSION2", None)
         self.SESSION3 = getenv("SESSION3", None)
 
-        self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/fallenx")
+        self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/UnhealedNotes")
         self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/DevilsHeavenMF")
 
-        self.API_URL = getenv("API_URL", "https://pvtz.nexgenbots.xyz")
-        self.VIDEO_API_URL = getenv("VIDEO_API_URL", "https://api.video.nexgenbots.xyz")
-        self.API_KEY = getenv("API_KEY", None) # Get this value from https://console.nexgenbots.xyz
+        self.API_URL = getenv("SHRUTI_API_URL", "https://api.shrutibots.site")
+        self.API_KEY = getenv("SHRUTI_API_KEY", "ShrutiBotsguDA4JWhgxUcQYiwkfmg")
 
         self.AUTO_LEAVE: bool = getenv("AUTO_LEAVE", "False").lower() == "true"
         self.AUTO_END: bool = getenv("AUTO_END", "False").lower() == "true"
@@ -42,8 +41,8 @@ class Config:
             if url and "batbin.me" in url
         ]
         self.DEFAULT_THUMB = getenv("DEFAULT_THUMB", "https://te.legra.ph/file/3e40a408286d4eda24191.jpg")
-        self.PING_IMG = getenv("PING_IMG", "https://files.catbox.moe/haagg2.png")
-        self.START_IMG = getenv("START_IMG", "https://files.catbox.moe/zvziwk.jpg")
+        self.PING_IMG = getenv("PING_IMG", "https://graph.org/file/5a4ab4d41f53c49c58c96-72c3a68a254b13ba08.jpg")
+        self.START_IMG = getenv("START_IMG", "https://graph.org/file/02f22d5f4ebb4c23492bc-916ac01b0bcd80384c.jpg")
 
     def check(self):
         missing = [
