@@ -24,7 +24,7 @@ class Config:
         self.SESSION3 = getenv("SESSION3", None)
 
         self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/UnhealedNotes")
-        self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/DevilsHeavenMF")
+        self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/+rfyqdrIu7txlYjk0")
 
         
         self.API_URL = getenv("API_URL", "https://pvtz.nexgenbots.xyz")
