@@ -3,10 +3,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ========== MODULE-LEVEL VARIABLES (for direct import) ==========
-API_URL = getenv("SHRUTI_API_URL", "https://api.shrutibots.site")
-API_KEY = getenv("SHRUTI_API_KEY", "ShrutiBotsguDA4JWhgxUcQYiwkfmg")
-
 # ========== CONFIG CLASS (for other parts of your bot) ==========
 class Config:
     def __init__(self):
@@ -30,9 +26,11 @@ class Config:
         self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/UnhealedNotes")
         self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/DevilsHeavenMF")
 
-        # Use the module-level variables
-        self.API_URL = API_URL
-        self.API_KEY = API_KEY
+        
+        self.API_URL = getenv("API_URL", "https://pvtz.nexgenbots.xyz")
+        self.VIDEO_API_URL = getenv("VIDEO_API_URL", "https://api.video.nexgenbots.xyz")
+        self.API_KEY = getenv("API_KEY", '30DxNexGenBotse49229') # Get this value from https://console.nexgenbots.xyz
+
 
         self.AUTO_LEAVE: bool = getenv("AUTO_LEAVE", "False").lower() == "true"
         self.AUTO_END: bool = getenv("AUTO_END", "False").lower() == "true"
