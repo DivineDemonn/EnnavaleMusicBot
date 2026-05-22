@@ -3,6 +3,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ========== MODULE-LEVEL VARIABLES (for direct import) ==========
+API_URL = getenv("SHRUTI_API_URL", "https://api.shrutibots.site")
+API_KEY = getenv("SHRUTI_API_KEY", "ShrutiBotsguDA4JWhgxUcQYiwkfmg")
+
+# ========== CONFIG CLASS (for other parts of your bot) ==========
 class Config:
     def __init__(self):
         self.API_ID = int(getenv("API_ID", 0))
@@ -25,8 +30,9 @@ class Config:
         self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/UnhealedNotes")
         self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/DevilsHeavenMF")
 
-        self.API_URL = getenv("SHRUTI_API_URL", "https://api.shrutibots.site")
-        self.API_KEY = getenv("SHRUTI_API_KEY", "ShrutiBotsguDA4JWhgxUcQYiwkfmg")
+        # Use the module-level variables (or re-fetch)
+        self.API_URL = API_URL
+        self.API_KEY = API_KEY
 
         self.AUTO_LEAVE: bool = getenv("AUTO_LEAVE", "False").lower() == "true"
         self.AUTO_END: bool = getenv("AUTO_END", "False").lower() == "true"
