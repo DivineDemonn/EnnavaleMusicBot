@@ -148,25 +148,34 @@ class Inline:
                 self.ikb(text=lang["channel"], url=config.SUPPORT_CHANNEL),
             ],
         ]
+
         if private:
             rows += [
                 [
                     self.ikb(
-                        text=lang["Owner"],
+                        text="Owner",
                         url="https://t.me/Deanlaurents",
                     )
                 ]
             ]
         else:
-            rows += [[self.ikb(text=lang["language"], callback_data="language")]]
+            rows += [
+                [
+                    self.ikb(
+                        text=lang["language"],
+                        callback_data="language"
+                    )
+                ]
+            ]
+
         return self.ikm(rows)
 
-    def yt_key(self, link: str) -> types.InlineKeyboardMarkup:
-        return self.ikm(
+def yt_key(self, link: str) -> types.InlineKeyboardMarkup:
+    return self.ikm(
+        [
             [
-                [
-                    self.ikb(text="❐", copy_text=link),
-                    self.ikb(text="Youtube", url=link),
-                ],
-            ]
-        )
+                self.ikb(text="❐", copy_text=link),
+                self.ikb(text="Youtube", url=link),
+            ],
+        ]
+    )
