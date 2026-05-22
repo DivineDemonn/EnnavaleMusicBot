@@ -30,7 +30,7 @@ class Config:
         self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/UnhealedNotes")
         self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/DevilsHeavenMF")
 
-        # Use the module-level variables (or re-fetch)
+        # Use the module-level variables
         self.API_URL = API_URL
         self.API_KEY = API_KEY
 
