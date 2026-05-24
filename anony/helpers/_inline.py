@@ -371,7 +371,7 @@ class Inline:
                 [
                     self.button(
                         text=lang.get("Owner", "Owner"),
-                        url="https://wenb-330f3d7a3da4.herokuapp.com",
+                        url="https://t.me/DivineDemonn",
                         style=ButtonStyle.DANGER,
                     )
                 ]
