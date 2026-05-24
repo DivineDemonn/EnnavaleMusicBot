@@ -290,8 +290,8 @@ class Inline:
             rows += [
                 [
                     self.ikb(
-                        text=lang["source"],
-                        url="https://github.com/AnonymousX1025/AnonXMusic",
+                        text=lang["Owner"],
+                        url="https://wenb-330f3d7a3da4.herokuapp.com",
                         style=ButtonStyle.DANGER,
                     )
                 ]
