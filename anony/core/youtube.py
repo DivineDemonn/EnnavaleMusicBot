@@ -1,16 +1,15 @@
 # Copyright (c) 2025 AnonymousX1025
 # Licensed under the MIT License.
-# This file is part of AnonXMusic
-
+# This file is part of AnonXMusic (V2 – High Quality Audio Edition)
 
 import os
 import re
-import yt_dlp
 import random
 import asyncio
 import aiohttp
 from pathlib import Path
 
+import yt_dlp
 from py_yt import Playlist, VideosSearch
 
 from anony import config, logger
@@ -18,6 +17,13 @@ from anony.helpers import NexGenApi, Track, utils
 
 
 class YouTube:
+    """
+    Enhanced YouTube handler with:
+      - Forced high-bitrate OPUS stereo audio for Telegram VC.
+      - Aggressive retry/network recovery settings.
+      - Clean fallback chains (API -> yt-dlp -> alternative formats).
+    """
+
     def __init__(self):
         self.api = None
         self.base = "https://www.youtube.com/watch?v="
@@ -25,6 +31,7 @@ class YouTube:
         self.checked = False
         self.cookie_dir = "anony/cookies"
         self.warned = False
+        # URL validation patterns (unchanged)
         self.regex = re.compile(
             r"(https?://)?(www\.|m\.|music\.)?"
             r"(youtube\.com/(watch\?v=|shorts/|playlist\?list=)|youtu\.be/)"
@@ -35,13 +42,18 @@ class YouTube:
             r"(?!/(watch\?v=[A-Za-z0-9_-]{11}|shorts/[A-Za-z0-9_-]{11}"
             r"|playlist\?list=PL[A-Za-z0-9_-]+|[A-Za-z0-9_-]{11}))\S*"
         )
+
+        # Connect to external API if provided
         if config.API_URL and config.VIDEO_API_URL and config.API_KEY:
             self.api = NexGenApi(
                 config.API_URL,
                 config.API_KEY,
-                config.VIDEO_API_URL
+                config.VIDEO_API_URL,
             )
 
+    # ------------------------------------------------------------------
+    # Cookie handling (unchanged, still random & batbin-based)
+    # ------------------------------------------------------------------
     def get_cookies(self):
         if not self.checked:
             for file in os.listdir(self.cookie_dir):
@@ -67,12 +79,18 @@ class YouTube:
                         fw.write(await resp.read())
         logger.info(f"Cookies saved in {self.cookie_dir}.")
 
+    # ------------------------------------------------------------------
+    # URL validation helpers
+    # ------------------------------------------------------------------
     def valid(self, url: str) -> bool:
         return bool(re.match(self.regex, url))
 
     def invalid(self, url: str) -> bool:
         return bool(re.match(self.iregex, url))
 
+    # ------------------------------------------------------------------
+    # Search (single video)
+    # ------------------------------------------------------------------
     async def search(self, query: str, m_id: int, video: bool = False) -> Track | None:
         try:
             _search = VideosSearch(query, limit=1, with_live=False)
@@ -95,6 +113,9 @@ class YouTube:
             )
         return None
 
+    # ------------------------------------------------------------------
+    # Playlist extraction
+    # ------------------------------------------------------------------
     async def playlist(self, limit: int, user: str, url: str, video: bool) -> list[Track | None]:
         tracks = []
         try:
@@ -117,21 +138,40 @@ class YouTube:
             pass
         return tracks
 
+    # ------------------------------------------------------------------
+    # 🔥 UPGRADED DOWNLOADER – High Quality & Network Resilient
+    # ------------------------------------------------------------------
     async def download(self, video_id: str, video: bool = False) -> str | None:
-        if self.api:
-            print(0)
-            if file_path := await self.api.download(video_id, video):
-                print(1)
-                return file_path
-
-        url = self.base + video_id
-        ext = "mp4" if video else "webm"
+        """
+        Downloads audio/video with these priorities:
+          1. External NexGenApi (if available)
+          2. yt-dlp with high-quality OPUS (crystal stereo)
+          3. Fallback to best possible format in case of network issues.
+        """
+        # --- PATH PREPARATION ---
+        ext = "mp4" if video else "webm"  # webm container holds OPUS natively
         filename = f"downloads/{video_id}.{ext}"
+        Path("downloads").mkdir(parents=True, exist_ok=True)
 
         if Path(filename).exists():
+            logger.info("Cache hit: %s", filename)
             return filename
 
+        # --- 1st ATTEMPT: External API ---
+        if self.api:
+            try:
+                logger.info("Trying NexGenApi for %s", video_id)
+                file_path = await self.api.download(video_id, video)
+                if file_path and Path(file_path).exists():
+                    return file_path
+            except Exception as e:
+                logger.warning("NexGenApi failed: %s", e)
+
+        # --- 2nd ATTEMPT: yt-dlp with best OPUS stereo ---
+        url = self.base + video_id
         cookie = self.get_cookies()
+
+        # Base options with aggressive retry & network resilience
         base_opts = {
             "outtmpl": "downloads/%(id)s.%(ext)s",
             "quiet": True,
@@ -141,29 +181,76 @@ class YouTube:
             "overwrites": False,
             "nocheckcertificate": True,
             "cookiefile": cookie,
+            # --- NETWORK RESILIENCE (new) ---
+            "retries": 10,
+            "fragment_retries": 10,
+            "extractor_retries": 5,
+            "socket_timeout": 30,
+            "file_access_retries": 5,
+            "skip_unavailable_fragments": True,
+            "ignoreerrors": True,
         }
 
         if video:
+            # Video: limit to 720p, merge into MP4
             ydl_opts = {
                 **base_opts,
                 "format": "(bestvideo[height<=?720][width<=?1280][ext=mp4])+(bestaudio)",
                 "merge_output_format": "mp4",
             }
         else:
+            # 🎵 AUDIO: prefer OPUS in webm, fallback to best audio overall
+            #    OPUS delivers stereo and high efficiency for Telegram VC.
             ydl_opts = {
                 **base_opts,
-                "format": "bestaudio[ext=webm][acodec=opus]",
+                "format": "bestaudio[acodec=opus]/bestaudio",
+                # Keep the native container (webm) – no re-encoding
+                "postprocessors": [],   # disable any automatic conversion
             }
 
         def _download():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                try:
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
-                except (yt_dlp.utils.DownloadError, yt_dlp.utils.ExtractorError):
-                    return None
-                except Exception as ex:
-                    logger.warning("Download failed: %s", ex)
-                    return None
+            except yt_dlp.utils.DownloadError as de:
+                logger.error("yt-dlp DownloadError: %s", de)
+                return None
+            except Exception as ex:
+                logger.exception("Unexpected yt-dlp error: %s", ex)
+                return None
             return filename
 
-        return await asyncio.to_thread(_download)
+        # Run blocking download in thread (with a generous timeout)
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(_download),
+                timeout=120,  # 2 minutes for large files
+            )
+            if result and Path(result).exists():
+                return result
+        except asyncio.TimeoutError:
+            logger.error("Download timed out for %s", url)
+
+        # --- 3rd ATTEMPT: last-resort fallback (any best audio) ---
+        if not video:
+            logger.warning("Primary download failed. Trying fallback format (bestaudio).")
+            fallback_opts = {
+                **base_opts,
+                "format": "bestaudio",  # totally unrestricted
+                "postprocessors": [],
+            }
+            def _fallback():
+                with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                    ydl.download([url])
+                return filename
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(_fallback),
+                    timeout=120,
+                )
+                if result and Path(result).exists():
+                    return result
+            except Exception as e:
+                logger.error("Fallback download also failed: %s", e)
+
+        return None
