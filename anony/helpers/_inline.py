@@ -43,7 +43,7 @@ class Inline:
                     self.ikb(
                         text=status,
                         callback_data=f"controls status {chat_id}",
-                        style=ButtonStyle.SECONDARY,
+                        style=ButtonStyle.PRIMARY,
                     )
                 ]
             )
@@ -54,7 +54,7 @@ class Inline:
                     self.ikb(
                         text=timer,
                         callback_data=f"controls status {chat_id}",
-                        style=ButtonStyle.SECONDARY,
+                        style=ButtonStyle.PRIMARY,
                     )
                 ]
             )
@@ -75,7 +75,7 @@ class Inline:
                     self.ikb(
                         text="⥁",
                         callback_data=f"controls replay {chat_id}",
-                        style=ButtonStyle.SECONDARY,
+                        style=ButtonStyle.PRIMARY,
                     ),
                     self.ikb(
                         text="‣‣I",
@@ -129,7 +129,7 @@ class Inline:
                 self.ikb(
                     text=_lang[f"help_{i}"],
                     callback_data=f"help {cb}",
-                    style=ButtonStyle.SECONDARY,
+                    style=ButtonStyle.PRIMARY,
                 )
                 for i, cb in enumerate(cbs)
             ]
@@ -146,7 +146,7 @@ class Inline:
             self.ikb(
                 text=f"{name} ({code}) {'✔️' if code == _lang else ''}",
                 callback_data=f"lang_change {code}",
-                style=ButtonStyle.PRIMARY if code == _lang else ButtonStyle.SECONDARY,
+                style=ButtonStyle.SUCCESS if code == _lang else ButtonStyle.PRIMARY,
             )
             for code, name in langs.items()
         ]
@@ -218,31 +218,31 @@ class Inline:
                     self.ikb(
                         text=lang["play_mode"] + " ➜",
                         callback_data="settings",
-                        style=ButtonStyle.SECONDARY,
+                        style=ButtonStyle.PRIMARY,
                     ),
                     self.ikb(
                         text=str(admin_only),
                         callback_data="settings play",
-                        style=ButtonStyle.PRIMARY,
+                        style=ButtonStyle.SUCCESS,
                     ),
                 ],
                 [
                     self.ikb(
                         text=lang["cmd_delete"] + " ➜",
                         callback_data="settings",
-                        style=ButtonStyle.SECONDARY,
+                        style=ButtonStyle.PRIMARY,
                     ),
                     self.ikb(
                         text=str(cmd_delete),
                         callback_data="settings delete",
-                        style=ButtonStyle.PRIMARY,
+                        style=ButtonStyle.SUCCESS,
                     ),
                 ],
                 [
                     self.ikb(
                         text=lang["language"] + " ➜",
                         callback_data="settings",
-                        style=ButtonStyle.SECONDARY,
+                        style=ButtonStyle.PRIMARY,
                     ),
                     self.ikb(
                         text=lang_codes[language],
@@ -276,12 +276,12 @@ class Inline:
                 self.ikb(
                     text=lang["support"],
                     url=config.SUPPORT_CHAT,
-                    style=ButtonStyle.SECONDARY,
+                    style=ButtonStyle.PRIMARY,
                 ),
                 self.ikb(
                     text=lang["channel"],
                     url=config.SUPPORT_CHANNEL,
-                    style=ButtonStyle.SECONDARY,
+                    style=ButtonStyle.PRIMARY,
                 ),
             ],
         ]
@@ -302,7 +302,7 @@ class Inline:
                     self.ikb(
                         text=lang["language"],
                         callback_data="language",
-                        style=ButtonStyle.PRIMARY,
+                        style=ButtonStyle.SUCCESS,
                     )
                 ]
             ]
