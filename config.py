@@ -32,7 +32,7 @@ class Config:
         self.API_KEY = getenv("API_KEY", '30DxNexGenBotse49229') # Get this value from https://console.nexgenbots.xyz
 
 
-        self.AUTO_LEAVE: bool = getenv("AUTO_LEAVE", "True").lower() == "true"
+        self.AUTO_LEAVE: bool = getenv("AUTO_LEAVE", "False").lower() == "true"
         self.AUTO_END: bool = getenv("AUTO_END", "False").lower() == "true"
     
         self.THUMB_GEN: bool = getenv("THUMB_GEN", "True").lower() == "true"
