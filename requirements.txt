@@ -9,4 +9,4 @@ py-tgcalls~=2.2.10
 py-yt-search~=0.6.1
 python-dotenv~=1.2.1
 yt-dlp[default]>=2026.3.13
-git+https://github.com/KurimuzonAkuma/Kurigram.git@v1.2.3
+git+https://github.com/KurimuzonAkuma/Kurigram.git
