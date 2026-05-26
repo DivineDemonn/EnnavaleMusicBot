@@ -331,4 +331,4 @@ async def get_thumb(videoid: str) -> str:
     return cache
 
 
-Thumbnail = get_thumb
+
