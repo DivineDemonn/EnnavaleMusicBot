@@ -11,7 +11,7 @@ import math
 import traceback
 
 from config import YOUTUBE_IMG_URL
-from ShrutixMusic.core.dir import CACHE_DIR
+from anony.core.dir import CACHE_DIR
 
 # ================= BASIC CONFIGURATION =================
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -80,8 +80,8 @@ def safe_load_font(font_path, size):
     """Safely loads a font, automatically falling back to system fonts if the custom ones are missing."""
     fonts_to_try = [
         font_path,
-        "ShrutixMusic/assets/font.ttf",
-        "ShrutixMusic/assets/font2.ttf",
+        "anony/assets/font.ttf",
+        "anony/assets/font2.ttf",
         "arial.ttf",
         "DejaVuSans.ttf",
         "FreeSans.ttf",
@@ -157,10 +157,10 @@ async def get_thumb(videoid: str) -> str:
         draw_shapes = ImageDraw.Draw(shapes_layer)
 
         # --- 2. FONTS ---
-        title_f = safe_load_font("ShrutixMusic/assets/Montserrat-Bold.ttf", 46)
-        artist_f = safe_load_font("ShrutixMusic/assets/Montserrat-Medium.ttf", 26)
-        time_f = safe_load_font("ShrutixMusic/assets/Montserrat-SemiBold.ttf", 16)
-        pill_f = safe_load_font("ShrutixMusic/assets/Montserrat-SemiBold.ttf", 16)
+        title_f = safe_load_font("anony/assets/Montserrat-Bold.ttf", 46)
+        artist_f = safe_load_font("anony/assets/Montserrat-Medium.ttf", 26)
+        time_f = safe_load_font("anony/assets/Montserrat-SemiBold.ttf", 16)
+        pill_f = safe_load_font("anony/assets/Montserrat-SemiBold.ttf", 16)
 
         # --- 3. LEFT PANEL: ALBUM ART ---
         cover_size = 500
@@ -211,8 +211,8 @@ async def get_thumb(videoid: str) -> str:
         # Empty track (translucent white/gray)
         draw_shapes.rounded_rectangle((rx, bar_y, rx + bar_w, bar_y + 8), radius=4, fill=(255, 255, 255, 70))
         
-        # DHIYABOTS PILL WITH BLACK TEXT
-        pill_text = "DHIYABOTS"
+        # NEXT-GEN PILL WITH BLACK TEXT
+        pill_text = "NEXT-GEN"
         pill_tw = get_text_width(draw, pill_text, pill_f)
         pill_cx = rx + (bar_w // 2)
         time_y = 325
