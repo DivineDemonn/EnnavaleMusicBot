@@ -330,9 +330,16 @@ async def get_thumb(videoid: str) -> str:
     
     return cache
 
-
 # ================= COMPATIBILITY CLASS =================
 class Thumbnail:
+    def __init__(self):
+        pass
+
+    async def start(self):
+        return True
+
+    async def stop(self):
+        return True
+
     async def thumbnail(self, videoid):
         return await get_thumb(videoid)
-
