@@ -343,3 +343,24 @@ class Thumbnail:
 
     async def thumbnail(self, videoid):
         return await get_thumb(videoid)
+
+    async def generate(self, media):
+        try:
+            videoid = None
+
+            if hasattr(media, "videoid"):
+                videoid = media.videoid
+
+            elif hasattr(media, "vidid"):
+                videoid = media.vidid
+
+            elif isinstance(media, dict):
+                videoid = media.get("videoid") or media.get("vidid")
+
+            if not videoid:
+                return YOUTUBE_IMG_URL
+
+            return await get_thumb(videoid)
+
+        except Exception:
+            return YOUTUBE_IMG_URL
