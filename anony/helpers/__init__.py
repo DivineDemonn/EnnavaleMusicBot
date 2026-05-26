@@ -8,10 +8,10 @@ from ._dataclass import Media, Track
 from ._exec import format_exception, meval
 from ._inline import Inline
 from ._queue import Queue
-from ._thumbnails import get_thumb
+from ._thumbnails import Thumbnail
 from ._utilities import Utilities
 
-Thumbnail = get_thumb
+thumb = Thumbnail()
 
 buttons = Inline()
 utils = Utilities()
