@@ -18,7 +18,7 @@ class Config:
         self.DURATION_LIMIT = int(getenv("DURATION_LIMIT", 240)) * 60   # 4 hours
         self.QUEUE_LIMIT = int(getenv("QUEUE_LIMIT", 100))
         self.PLAYLIST_LIMIT = int(getenv("PLAYLIST_LIMIT", 100))
-
+        
         self.SESSION1 = getenv("SESSION", None)
         self.SESSION2 = getenv("SESSION2", None)
         self.SESSION3 = getenv("SESSION3", None)
@@ -47,6 +47,8 @@ class Config:
         self.DEFAULT_THUMB = getenv("DEFAULT_THUMB", "https://te.legra.ph/file/3e40a408286d4eda24191.jpg")
         self.PING_IMG = getenv("PING_IMG", "https://graph.org/file/5a4ab4d41f53c49c58c96-72c3a68a254b13ba08.jpg")
         self.START_IMG = getenv("START_IMG", "https://graph.org/file/02f22d5f4ebb4c23492bc-916ac01b0bcd80384c.jpg")
+        self.YOUTUBE_IMG_URL = getenv("YOUTUBE_IMG_URL", "https://te.legra.ph/file/bb0ff85f2dd44070ea519.jpg")
+                                      
 
     def check(self):
         missing = [
