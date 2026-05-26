@@ -10,8 +10,11 @@ from py_yt import VideosSearch
 import math
 import traceback
 
-from config import YOUTUBE_IMG_URL
+from config import Config
 from anony.core.dir import CACHE_DIR
+
+config = Config()
+YOUTUBE_IMG_URL = config.YOUTUBE_IMG_URL
 
 # ================= BASIC CONFIGURATION =================
 os.makedirs(CACHE_DIR, exist_ok=True)
