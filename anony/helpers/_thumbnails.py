@@ -2,12 +2,14 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-
 import os
 import re
 import aiohttp
-from PIL import (Image, ImageDraw, ImageEnhance,
-                 ImageFilter, ImageFont, ImageOps)
+import asyncio
+from PIL import (
+    Image, ImageDraw, ImageEnhance,
+    ImageFilter, ImageFont, ImageOps
+)
 
 from anony import config
 from anony.helpers import Track
@@ -52,6 +54,13 @@ def apply_rounded_corners(image, radius):
     return result
 
 
+def create_glassmorphism(size, radius=20, opacity=40):
+    """Create a glassmorphic overlay rectangle."""
+    glass = Image.new("RGBA", size, (255, 255, 255, opacity))
+    glass = apply_rounded_corners(glass, radius)
+    return glass
+
+
 def get_real_artist(title, channel_name):
     """Extract real artist name from title when channel is a label."""
     c_name = re.sub(r"(?i)\s*-\s*topic", "", channel_name)
@@ -81,11 +90,14 @@ def safe_load_font(font_path, size):
         font_path,
         "anony/helpers/Raleway-Bold.ttf",
         "anony/helpers/Inter-Light.ttf",
+        "anony/helpers/Inter-Medium.ttf",
+        "anony/helpers/SF-Pro-Display-Bold.otf",
         "arial.ttf",
         "DejaVuSans.ttf",
         "FreeSans.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
     ]
     for font in fonts_to_try:
         try:
@@ -97,16 +109,14 @@ def safe_load_font(font_path, size):
 
 class Thumbnail:
     def __init__(self):
-        self.rect = (500, 500)
-        self.fill = (255, 255, 255, 255)
-        self.mask = Image.new("L", self.rect, 0)
         self.session: aiohttp.ClientSession | None = None
         
-        # Modern design fonts
-        self.font_title = safe_load_font("anony/helpers/Raleway-Bold.ttf", 46)
-        self.font_artist = safe_load_font("anony/helpers/Inter-Light.ttf", 26)
-        self.font_time = safe_load_font("anony/helpers/Inter-Light.ttf", 16)
-        self.font_pill = safe_load_font("anony/helpers/Raleway-Bold.ttf", 16)
+        # Premium typography
+        self.font_title = safe_load_font("anony/helpers/Raleway-Bold.ttf", 44)
+        self.font_artist = safe_load_font("anony/helpers/Inter-Light.ttf", 28)
+        self.font_time = safe_load_font("anony/helpers/Inter-Light.ttf", 18)
+        self.font_pill = safe_load_font("anony/helpers/Raleway-Bold.ttf", 17)
+        self.font_button = safe_load_font("anony/helpers/Inter-Medium.ttf", 24)
 
     async def start(self) -> None:
         self.session = aiohttp.ClientSession()
@@ -121,6 +131,106 @@ class Thumbnail:
                 f.write(await resp.read())
         return output_path
 
+    def draw_player_controls(self, draw, center_x, y, controls_color):
+        """Draw modern music player controls."""
+        # Previous button
+        prev_x = center_x - 140
+        # Left arrow
+        draw.polygon(
+            [(prev_x + 24, y - 20), (prev_x, y), (prev_x + 24, y + 20)],
+            fill=controls_color
+        )
+        draw.rectangle((prev_x - 8, y - 20, prev_x - 2, y + 20), fill=controls_color)
+
+        # Play/Pause button (showing pause state)
+        bar_w = 8
+        bar_h = 36
+        gap = 12
+        draw.rounded_rectangle(
+            (center_x - gap - bar_w, y - bar_h // 2, center_x - gap, y + bar_h // 2),
+            radius=3, fill=controls_color
+        )
+        draw.rounded_rectangle(
+            (center_x + gap, y - bar_h // 2, center_x + gap + bar_w, y + bar_h // 2),
+            radius=3, fill=controls_color
+        )
+
+        # Next button
+        next_x = center_x + 140
+        draw.polygon(
+            [(next_x - 16, y - 20), (next_x + 8, y), (next_x - 16, y + 20)],
+            fill=controls_color
+        )
+        draw.rectangle((next_x + 12, y - 20, next_x + 18, y + 20), fill=controls_color)
+
+    def draw_volume_control(self, draw, center_x, y, controls_color):
+        """Draw volume slider with speaker icon."""
+        vol_width = 320
+        vol_start = center_x - vol_width // 2 + 40
+
+        # Speaker icon
+        sp_x = vol_start - 30
+        draw.polygon(
+            [(sp_x, y - 8), (sp_x + 8, y - 8),
+             (sp_x + 18, y - 16), (sp_x + 18, y + 16),
+             (sp_x + 8, y + 8), (sp_x, y + 8)],
+            fill=controls_color
+        )
+        # Sound waves
+        draw.arc(
+            (sp_x + 20, y - 10, sp_x + 32, y + 10),
+            280, 80, fill=controls_color, width=2
+        )
+        draw.arc(
+            (sp_x + 25, y - 16, sp_x + 41, y + 16),
+            280, 80, fill=controls_color, width=2
+        )
+
+        # Volume bar background
+        draw.rounded_rectangle(
+            (vol_start, y - 2, vol_start + vol_width - 30, y + 2),
+            radius=2, fill=(255, 255, 255, 40)
+        )
+        # Volume level (60% filled)
+        filled_vol = int((vol_width - 30) * 0.6)
+        draw.rounded_rectangle(
+            (vol_start, y - 2, vol_start + filled_vol, y + 2),
+            radius=2, fill=controls_color
+        )
+        # Volume handle
+        draw.ellipse(
+            (vol_start + filled_vol - 6, y - 8, vol_start + filled_vol + 6, y + 8),
+            fill=controls_color
+        )
+
+    def draw_bottom_controls(self, draw, center_x, y, controls_color):
+        """Draw bottom UI elements (lyrics and queue)."""
+        # Lyrics icon
+        lyrics_x = center_x - 50
+        draw.rounded_rectangle(
+            (lyrics_x - 4, y - 14, lyrics_x + 28, y + 10),
+            radius=6, outline=controls_color, width=2
+        )
+        # Text lines inside lyrics icon
+        draw.rectangle((lyrics_x + 4, y - 8, lyrics_x + 6, y), fill=controls_color)
+        draw.rectangle((lyrics_x + 10, y - 8, lyrics_x + 12, y), fill=controls_color)
+        draw.rectangle((lyrics_x + 16, y - 8, lyrics_x + 18, y), fill=controls_color)
+        # Arrow
+        draw.polygon(
+            [(lyrics_x + 10, y + 10), (lyrics_x + 16, y + 10), (lyrics_x + 13, y + 18)],
+            fill=controls_color
+        )
+
+        # Queue icon
+        queue_x = center_x + 30
+        for i in range(3):
+            y_pos = y - 10 + i * 12
+            draw.ellipse((queue_x, y_pos, queue_x + 4, y_pos + 4), fill=controls_color)
+            draw.rectangle(
+                (queue_x + 10, y_pos + 1, queue_x + 36, y_pos + 3),
+                fill=controls_color
+            )
+
     async def generate(self, song: Track, size=(1280, 720)) -> str:
         try:
             temp = f"cache/temp_{song.id}.jpg"
@@ -130,233 +240,187 @@ class Thumbnail:
 
             await self.save_thumb(temp, song.thumbnail)
             
-            # Open thumbnail as album art
+            # Load album art
             album_art = Image.open(temp).convert("RGBA")
 
-            # --- 1. BLURRED BACKGROUND ---
+            # --- 1. PREMIUM BACKGROUND ---
             canvas = Image.new("RGBA", size, (0, 0, 0, 255))
+            
+            # Create deeply blurred background
             bg_blurred = album_art.resize(size, Image.LANCZOS)
-            bg_blurred = bg_blurred.filter(ImageFilter.GaussianBlur(15))
+            bg_blurred = bg_blurred.filter(ImageFilter.GaussianBlur(30))
+            
+            # Enhance colors for cinematic feel
+            enhancer = ImageEnhance.Brightness(bg_blurred)
+            bg_blurred = enhancer.enhance(0.7)
+            enhancer = ImageEnhance.Color(bg_blurred)
+            bg_blurred = enhancer.enhance(1.2)
+            
             canvas.paste(bg_blurred, (0, 0))
 
-            # Dark overlay for contrast
-            overlay = Image.new("RGBA", size, (0, 0, 0, 80))
-            canvas = Image.alpha_composite(canvas, overlay)
+            # Add subtle gradient overlay for depth
+            gradient = Image.new("RGBA", size, (0, 0, 0, 0))
+            grad_draw = ImageDraw.Draw(gradient)
+            for i in range(size[1]):
+                opacity = int(80 * (i / size[1]))
+                grad_draw.line([(0, i), (size[0], i)], fill=(0, 0, 0, opacity))
+            canvas = Image.alpha_composite(canvas, gradient)
 
-            # Shapes layer for translucent elements
-            shapes_layer = Image.new("RGBA", size, (0, 0, 0, 0))
-            draw_shapes = ImageDraw.Draw(shapes_layer)
-            draw = ImageDraw.Draw(canvas)
-
-            # --- 2. LEFT PANEL: ALBUM ART ---
+            # --- 2. LEFT PANEL: ALBUM ART WITH SHADOW ---
             cover_size = 500
             cover_x = 80
             cover_y = 110
 
-            cover = album_art.resize((cover_size, cover_size), Image.LANCZOS)
-            cover = apply_rounded_corners(cover, 35)
-
-            # Shadow behind cover
-            shadow = Image.new("RGBA", (cover_size + 40, cover_size + 40), (0, 0, 0, 0))
+            # Create shadow
+            shadow = Image.new("RGBA", (cover_size + 60, cover_size + 60), (0, 0, 0, 0))
             shadow_draw = ImageDraw.Draw(shadow)
             shadow_draw.rounded_rectangle(
-                (20, 20, cover_size + 20, cover_size + 20), 40, fill=(0, 0, 0, 120)
+                (30, 30, cover_size + 30, cover_size + 30),
+                45, fill=(0, 0, 0, 120)
             )
-            shadow = shadow.filter(ImageFilter.GaussianBlur(20))
-            canvas.alpha_composite(shadow, (cover_x - 20, cover_y - 20))
+            shadow = shadow.filter(ImageFilter.GaussianBlur(25))
+            canvas.alpha_composite(shadow, (cover_x - 30, cover_y - 30))
+
+            # Album art with rounded corners
+            cover = album_art.resize((cover_size, cover_size), Image.LANCZOS)
+            cover = apply_rounded_corners(cover, 35)
+            
+            # Subtle inner shadow effect
+            inner_shadow = Image.new("RGBA", (cover_size, cover_size), (0, 0, 0, 0))
+            inner_draw = ImageDraw.Draw(inner_shadow)
+            inner_draw.rounded_rectangle(
+                (0, 0, cover_size, cover_size), 35,
+                outline=(0, 0, 0, 30), width=2
+            )
+            cover = Image.alpha_composite(cover, inner_shadow)
+            
             canvas.paste(cover, (cover_x, cover_y), cover)
 
-            # --- 3. RIGHT PANEL: CONTENT ---
-            rx = 640
-            bar_w = 560
+            # --- 3. RIGHT CONTENT AREA ---
+            right_x = 640
+            content_width = 560
+            center_x = right_x + content_width // 2
+            
+            draw = ImageDraw.Draw(canvas)
             white = (255, 255, 255, 255)
-            gray_text = (200, 200, 200, 255)
-            black = (0, 0, 0, 255)
+            light_gray = (220, 220, 220, 255)
+            dim_gray = (180, 180, 180, 255)
 
-            # Title
-            title_text = trim_text(draw, song.title, self.font_title, 430)
-            draw.text((rx, 140), title_text, font=self.font_title, fill=white)
+            # Glassmorphism panel behind text
+            glass_panel = create_glassmorphism(
+                (content_width + 40, 280), radius=20, opacity=15
+            )
+            canvas.alpha_composite(glass_panel, (right_x - 20, 100))
 
-            # Top Right Buttons (Star & Dots)
-            circ_y = 145
-            circ_size = 40
-            draw_shapes.ellipse(
-                (1090, circ_y, 1090 + circ_size, circ_y + circ_size),
-                fill=(255, 255, 255, 70)
-            )
-            draw_shapes.ellipse(
-                (1140, circ_y, 1140 + circ_size, circ_y + circ_size),
-                fill=(255, 255, 255, 70)
-            )
-
-            # Star icon
-            draw.polygon(
-                [(1110, 155), (1113, 161), (1120, 162), (1115, 166),
-                 (1117, 173), (1110, 169), (1103, 173), (1105, 166),
-                 (1100, 162), (1107, 161)],
-                outline=white, width=2
-            )
-            # Three dots
-            draw.ellipse((1158, 155, 1162, 159), fill=white)
-            draw.ellipse((1158, 163, 1162, 167), fill=white)
-            draw.ellipse((1158, 171, 1162, 175), fill=white)
+            # Song Title
+            title_text = trim_text(draw, song.title, self.font_title, content_width - 40)
+            draw.text((right_x, 140), title_text, font=self.font_title, fill=white)
 
             # Artist name
             artist = get_real_artist(song.title, song.channel_name).upper()
-            artist_text = trim_text(draw, artist, self.font_artist, bar_w)
-            draw.text((rx, 205), artist_text, font=self.font_artist, fill=gray_text)
+            artist_text = trim_text(draw, artist, self.font_artist, content_width - 40)
+            draw.text((right_x, 200), artist_text, font=self.font_artist, fill=light_gray)
 
-            # --- 4. PROGRESS BAR & BRAND PILL ---
-            bar_y = 300
-
-            # Empty track background
-            draw_shapes.rounded_rectangle(
-                (rx, bar_y, rx + bar_w, bar_y + 8), radius=4,
-                fill=(255, 255, 255, 70)
-            )
-
-            # Brand pill
-            pill_text = "ANONX"
-            pill_tw = get_text_width(draw, pill_text, self.font_pill)
-            pill_cx = rx + (bar_w // 2)
-            time_y = 325
-
-            draw_shapes.rounded_rectangle(
-                (pill_cx - pill_tw // 2 - 16, time_y - 4,
-                 pill_cx + pill_tw // 2 + 16, time_y + 26),
-                radius=15, fill=(255, 255, 255, 120)
-            )
-
-            # Composite shapes layer
-            canvas = Image.alpha_composite(canvas, shapes_layer)
-            draw = ImageDraw.Draw(canvas)
-
-            # Filled progress (25%)
-            filled_w = int(bar_w * 0.25)
+            # --- 4. PROGRESS BAR WITH BRAND PILL ---
+            bar_y = 290
+            bar_width = content_width
+            bar_height = 6
+            
+            # Progress bar background
             draw.rounded_rectangle(
-                (rx, bar_y, rx + filled_w, bar_y + 8), radius=4, fill=white
+                (right_x, bar_y, right_x + bar_width, bar_y + bar_height),
+                radius=3, fill=(255, 255, 255, 50)
             )
-
-            # Circular handle
+            
+            # Progress filled (30%)
+            progress_width = int(bar_width * 0.3)
+            draw.rounded_rectangle(
+                (right_x, bar_y, right_x + progress_width, bar_y + bar_height),
+                radius=3, fill=white
+            )
+            
+            # Progress handle
+            handle_radius = 7
             draw.ellipse(
-                (rx + filled_w - 8, bar_y - 4, rx + filled_w + 8, bar_y + 12),
+                (right_x + progress_width - handle_radius, bar_y - handle_radius + bar_height//2,
+                 right_x + progress_width + handle_radius, bar_y + handle_radius + bar_height//2),
                 fill=white
             )
 
-            # Timestamps
-            draw.text((rx, time_y), "0:01", font=self.font_time, fill=white)
-            dur_w = get_text_width(draw, song.duration or "LIVE", self.font_time)
+            # Time labels
+            time_y = bar_y + 20
+            draw.text((right_x, time_y), "1:23", font=self.font_time, fill=dim_gray)
+            duration = song.duration or "LIVE"
+            dur_width = get_text_width(draw, duration, self.font_time)
             draw.text(
-                (rx + bar_w - dur_w, time_y),
-                f"-{song.duration}" if song.duration else "-LIVE",
-                font=self.font_time, fill=white
+                (right_x + bar_width - dur_width, time_y),
+                duration, font=self.font_time, fill=dim_gray
             )
 
-            # Pill text
+            # Brand pill in center
+            pill_text = "ENNAVALEMUSICBOT"
+            pill_width = get_text_width(draw, pill_text, self.font_pill)
+            pill_padding = 16
+            pill_rect = (
+                center_x - pill_width // 2 - pill_padding,
+                time_y - 6,
+                center_x + pill_width // 2 + pill_padding,
+                time_y + 28
+            )
+            draw.rounded_rectangle(pill_rect, radius=14, fill=(255, 255, 255, 150))
             draw.text(
-                (pill_cx - pill_tw // 2, time_y + 2),
-                pill_text, font=self.font_pill, fill=black
+                (center_x - pill_width // 2, time_y + 2),
+                pill_text, font=self.font_pill, fill=(0, 0, 0, 255)
             )
 
-            # --- 5. PLAYBACK CONTROLS ---
-            cy = 480
-            cx = rx + (bar_w // 2)
+            # --- 5. PLAYER CONTROLS ---
+            controls_y = 420
+            self.draw_player_controls(draw, center_x, controls_y, white)
 
-            # Pause button
-            p_w = 10
-            p_h = 44
-            p_space = 8
+            # --- 6. VOLUME CONTROL ---
+            volume_y = 510
+            self.draw_volume_control(draw, center_x, volume_y, white)
+
+            # --- 7. BOTTOM CONTROLS ---
+            bottom_y = 600
+            self.draw_bottom_controls(draw, center_x, bottom_y, white)
+
+            # --- 8. TOP RIGHT DECORATIVE ELEMENTS ---
+            # Favorite button
+            fav_x = 1090
+            fav_y = 150
             draw.rounded_rectangle(
-                (cx - p_space - p_w, cy - p_h // 2, cx - p_space, cy + p_h // 2),
-                radius=3, fill=white
+                (fav_x, fav_y, fav_x + 40, fav_y + 40),
+                radius=20, fill=(255, 255, 255, 60)
             )
+            # Star shape
+            star_cx = fav_x + 20
+            star_cy = fav_y + 20
+            draw.polygon(
+                [(star_cx, star_cy - 8), (star_cx + 2, star_cy - 2),
+                 (star_cx + 8, star_cy - 1), (star_cx + 3, star_cy + 2),
+                 (star_cx + 5, star_cy + 8), (star_cx, star_cy + 4),
+                 (star_cx - 5, star_cy + 8), (star_cx - 3, star_cy + 2),
+                 (star_cx - 8, star_cy - 1), (star_cx - 2, star_cy - 2)],
+                fill=white
+            )
+
+            # Menu button
+            menu_x = 1145
             draw.rounded_rectangle(
-                (cx + p_space, cy - p_h // 2, cx + p_space + p_w, cy + p_h // 2),
-                radius=3, fill=white
+                (menu_x, fav_y, menu_x + 40, fav_y + 40),
+                radius=20, fill=(255, 255, 255, 60)
             )
-
-            # Previous button
-            px = cx - 130
-            tri_h = 22
-            draw.polygon(
-                [(px - 2, cy), (px + 22, cy - tri_h), (px + 22, cy + tri_h)],
-                fill=white
-            )
-            draw.polygon(
-                [(px - 26, cy), (px - 2, cy - tri_h), (px - 2, cy + tri_h)],
-                fill=white
-            )
-            draw.rectangle((px - 32, cy - tri_h, px - 28, cy + tri_h), fill=white)
-
-            # Next button
-            nx = cx + 130
-            draw.polygon(
-                [(nx + 2, cy - tri_h), (nx + 2, cy + tri_h), (nx + 26, cy)],
-                fill=white
-            )
-            draw.polygon(
-                [(nx - 22, cy - tri_h), (nx - 22, cy + tri_h), (nx + 2, cy)],
-                fill=white
-            )
-            draw.rectangle((nx + 28, cy - tri_h, nx + 32, cy + tri_h), fill=white)
-
-            # --- 6. VOLUME BAR ---
-            vol_y = 560
-            vol_len = 400
-            vol_x_start = cx - (vol_len // 2)
-
-            # Speaker icon
-            sx = vol_x_start
-            draw.polygon(
-                [(sx, vol_y - 5), (sx + 6, vol_y - 5),
-                 (sx + 14, vol_y - 12), (sx + 14, vol_y + 12),
-                 (sx + 6, vol_y + 5), (sx, vol_y + 5)],
-                fill=white
-            )
-            draw.arc(
-                (sx + 16, vol_y - 6, sx + 26, vol_y + 6),
-                270, 90, fill=white, width=2
-            )
-            draw.arc(
-                (sx + 20, vol_y - 12, sx + 34, vol_y + 12),
-                270, 90, fill=white, width=2
-            )
-
-            # Volume bar
-            draw.rounded_rectangle(
-                (sx + 45, vol_y - 3, sx + vol_len, vol_y + 3),
-                radius=3, fill=white
-            )
-
-            # --- 7. BOTTOM UI ---
-            bot_y = 620
-            cx_chat = cx - 40
-            draw.rounded_rectangle(
-                (cx_chat, bot_y - 14, cx_chat + 32, bot_y + 10),
-                radius=5, outline=white, width=3
-            )
-            draw.polygon(
-                [(cx_chat + 10, bot_y + 10), (cx_chat + 16, bot_y + 10),
-                 (cx_chat + 10, bot_y + 18)],
-                fill=white
-            )
-            draw.rectangle((cx_chat + 8, bot_y - 5, cx_chat + 11, bot_y + 2), fill=white)
-            draw.rectangle((cx_chat + 14, bot_y - 5, cx_chat + 17, bot_y + 2), fill=white)
-
-            # Queue icon
-            lx = cx + 40
-            ly = bot_y - 12
             for i in range(3):
-                y_off = ly + i * 10
-                draw.ellipse((lx, y_off, lx + 4, y_off + 4), fill=white)
-                draw.rectangle((lx + 10, y_off + 1, lx + 36, y_off + 3), fill=white)
+                dot_y = fav_y + 15 + i * 5
+                draw.ellipse((menu_x + 18, dot_y, menu_x + 22, dot_y + 4), fill=white)
 
-            # --- 8. SAVE ---
-            image = canvas
-            image.save(output, quality=100)
+            # --- 9. SAVE FINAL IMAGE ---
+            canvas.save(output, quality=100, optimize=True)
+            
+            # Cleanup
             album_art.close()
             canvas.close()
-
             try:
                 os.remove(temp)
             except Exception:
