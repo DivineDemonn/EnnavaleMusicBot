@@ -27,9 +27,6 @@ class Config:
         self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/+rfyqdrIu7txlYjk0")
 
         
-        self.API_URL = getenv("API_URL", "https://pvtz.nexgenbots.xyz")
-        self.VIDEO_API_URL = getenv("VIDEO_API_URL", "https://api.video.nexgenbots.xyz")
-        self.API_KEY = getenv("API_KEY", '30DxNexGenBotse49229') # Get this value from https://console.nexgenbots.xyz
         self.SHRUTI_API_URL = getenv("SHRUTI_API_URL", "https://api.shrutibots.site")
         self.SHRUTI_API_KEY = getenv("SHRUTI_API_KEY", "ShrutiBotsguDA4JWhgxUcQYiwkfmg")
 
