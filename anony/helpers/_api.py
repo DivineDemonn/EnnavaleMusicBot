@@ -62,28 +62,52 @@ class NexGenApi:
         elif not video and vid_id in self.dl_cache:
             return self.dl_cache[vid_id]
 
-        endp = f"{self.api_url}/song/{vid_id}?api={self.api_key}"
+        # Shruti API endpoint format
         if video:
-            endp = f"{self.video_api_url}/video/{vid_id}?api={self.api_key}"
+            endp = f"{self.video_api_url}/download?url={vid_id}&type=video&api_key={self.api_key}"
+        else:
+            endp = f"{self.api_url}/download?url={vid_id}&type=audio&api_key={self.api_key}"
 
         for _ in range(self.retries):
             try:
                 async with self.session.get(endp, headers=self.headers) as resp:
-                    data = await resp.json()
-                    if resp.status != 200: return None
-
-                    status = data.get("status")
-                    dl_link = data.get("link")
-                    if not status: return None
-
-                    if status == "done":
-                        if not dl_link: return None
-                        return await self.save_file(vid_id, dl_link, video)
-                    elif status == "downloading":
-                        await asyncio.sleep(4)
-                        continue
+                    # Shruti API might return direct download or JSON
+                    content_type = resp.headers.get('Content-Type', '')
+                    
+                    if 'application/json' in content_type:
+                        data = await resp.json()
+                        if resp.status != 200:
+                            return None
+                        
+                        status = data.get("status")
+                        dl_link = data.get("link") or data.get("url")
+                        
+                        if status == "done" or dl_link:
+                            if not dl_link:
+                                return None
+                            return await self.save_file(vid_id, dl_link, video)
+                        elif status == "downloading":
+                            await asyncio.sleep(4)
+                            continue
+                        else:
+                            break
                     else:
-                        break
+                        # Direct file download
+                        if resp.status == 200:
+                            file_name = vid_id + (".mp4" if video else ".mp3")
+                            fname = f"downloads/{file_name}"
+                            async with aiofiles.open(fname, "wb") as f:
+                                async for chunk in resp.content.iter_chunked(self.chunk_limit):
+                                    if chunk:
+                                        await f.write(chunk)
+                            
+                            if video:
+                                self.v_cache[vid_id] = fname
+                            else:
+                                self.dl_cache[vid_id] = fname
+                            return fname
+                        else:
+                            return None
             except Exception:
                 break
         return None
