@@ -21,7 +21,7 @@ class YouTube:
     Enhanced YouTube handler with:
       - Forced high-bitrate OPUS stereo audio for Telegram VC.
       - Aggressive retry/network recovery settings.
-      - Clean fallback chains (API -> yt-dlp -> alternative formats).
+      - Clean fallback chains (Shruti API -> yt-dlp -> alternative formats).
     """
 
     def __init__(self):
@@ -43,12 +43,12 @@ class YouTube:
             r"|playlist\?list=PL[A-Za-z0-9_-]+|[A-Za-z0-9_-]{11}))\S*"
         )
 
-        # Connect to external API if provided
-        if config.API_URL and config.VIDEO_API_URL and config.API_KEY:
+        # Connect to Shruti API if provided
+        if config.SHRUTI_API_URL and config.SHRUTI_API_KEY:
             self.api = NexGenApi(
-                config.API_URL,
-                config.API_KEY,
-                config.VIDEO_API_URL,
+                config.SHRUTI_API_URL,
+                config.SHRUTI_API_KEY,
+                config.SHRUTI_API_URL,  # Using same URL for both audio and video
             )
 
     # ------------------------------------------------------------------
@@ -144,7 +144,7 @@ class YouTube:
     async def download(self, video_id: str, video: bool = False) -> str | None:
         """
         Downloads audio/video with these priorities:
-          1. External NexGenApi (if available)
+          1. Shruti API (if available)
           2. yt-dlp with high-quality OPUS (crystal stereo)
           3. Fallback to best possible format in case of network issues.
         """
@@ -157,15 +157,17 @@ class YouTube:
             logger.info("Cache hit: %s", filename)
             return filename
 
-        # --- 1st ATTEMPT: External API ---
+        # --- 1st ATTEMPT: Shruti API ---
         if self.api:
             try:
-                logger.info("Trying NexGenApi for %s", video_id)
+                logger.info("Trying Shruti API for %s", video_id)
+                # Ensure session is initialized
+                await self.api.get_session()
                 file_path = await self.api.download(video_id, video)
                 if file_path and Path(file_path).exists():
                     return file_path
             except Exception as e:
-                logger.warning("NexGenApi failed: %s", e)
+                logger.warning("Shruti API failed: %s", e)
 
         # --- 2nd ATTEMPT: yt-dlp with best OPUS stereo ---
         url = self.base + video_id
