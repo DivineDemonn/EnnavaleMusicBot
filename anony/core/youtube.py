@@ -155,7 +155,7 @@ class YouTube:
           4. Fallback to best possible format in case of network issues.
         """
         # --- PATH PREPARATION ---
-        ext = "mp4" if video else "mp3"  # APIs return mp3/mp4
+        ext = "mp4" if video else "mp3"
         filename = f"downloads/{video_id}.{ext}"
         Path("downloads").mkdir(parents=True, exist_ok=True)
 
@@ -163,20 +163,24 @@ class YouTube:
         for existing_ext in ["mp3", "mp4", "webm"]:
             existing_file = f"downloads/{video_id}.{existing_ext}"
             if Path(existing_file).exists():
-                logger.info("Cache hit: %s", existing_file)
+                logger.info("📦 Cache hit: %s", existing_file)
                 return existing_file
 
         # --- ATTEMPT 1 & 2: Primary → Secondary API ---
+        logger.info("🚀 Starting API download for %s (Primary → Secondary)", video_id)
         try:
-            logger.info("Trying API download for %s (Primary → Secondary)", video_id)
             await self.api.get_session()
             file_path = await self.api.download(video_id, video)
             if file_path and Path(file_path).exists():
+                logger.info("✅ API download successful: %s", file_path)
                 return file_path
+            else:
+                logger.warning("❌ All APIs failed, falling back to yt-dlp...")
         except Exception as e:
-            logger.warning("API download failed: %s", e)
+            logger.error("❌ API download error: %s", e)
 
         # --- ATTEMPT 3: yt-dlp with best OPUS stereo ---
+        logger.info("⬇️ Attempting yt-dlp download for %s", video_id)
         url = self.base + video_id
         cookie = self.get_cookies()
 
