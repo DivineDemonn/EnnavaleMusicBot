@@ -10,6 +10,7 @@ import aiofiles
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from anony import logger
 
 
 class NexGenApi:
@@ -45,6 +46,9 @@ class NexGenApi:
         # Track which API is working
         self.primary_available = bool(ytproxy_url and yt_api_key)
         self.secondary_available = bool(shruti_api_url and shruti_api_key)
+        
+        logger.info(f"API Status - Primary (YTProxy): {'✓ Available' if self.primary_available else '✗ Not configured'}")
+        logger.info(f"API Status - Secondary (Shruti): {'✓ Available' if self.secondary_available else '✗ Not configured'}")
 
     async def get_session(self) -> None:
         if not self.session:
@@ -68,6 +72,7 @@ class NexGenApi:
         try:
             async with self.session.get(url) as resp:
                 if resp.status != 200:
+                    logger.warning(f"Save file failed: HTTP {resp.status}")
                     return None
 
                 file_name = None
@@ -94,9 +99,10 @@ class NexGenApi:
                 else:
                     self.dl_cache[vid_id] = fname
 
+                logger.info(f"✓ File saved: {fname}")
                 return fname
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Save file error: {e}")
         return None
 
     # ================================================================
@@ -105,41 +111,61 @@ class NexGenApi:
     async def _download_primary(self, vid_id: str, video: bool = False) -> str | None:
         """Download using primary YTProxy API."""
         if not self.primary_available:
+            logger.warning("⏭ Primary API not configured, skipping...")
             return None
 
+        logger.info(f"🔵 [PRIMARY] Trying YTProxy API for {vid_id}...")
+        
         headers = {
             "x-api-key": self.yt_api_key,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
         try:
-            # Get video/audio info from YTProxy
-            async with self.session.get(
-                f"{self.ytproxy_url}/info/{vid_id}",
-                headers=headers,
-                timeout=60
-            ) as resp:
+            api_url = f"{self.ytproxy_url}/info/{vid_id}"
+            logger.info(f"🔵 [PRIMARY] Requesting: {api_url}")
+            
+            async with self.session.get(api_url, headers=headers, timeout=60) as resp:
+                logger.info(f"🔵 [PRIMARY] Response status: {resp.status}")
+                
                 if resp.status != 200:
+                    logger.warning(f"🔵 [PRIMARY] Failed: HTTP {resp.status}")
                     return None
                 
                 data = await resp.json()
+                logger.info(f"🔵 [PRIMARY] Response data status: {data.get('status')}")
                 
                 if data.get('status') != 'success':
+                    logger.warning(f"🔵 [PRIMARY] API error: {data.get('message', 'Unknown')}")
                     return None
                 
                 # Get download URL
                 dl_url = data.get('video_url') if video else data.get('audio_url')
                 if not dl_url:
+                    logger.warning("🔵 [PRIMARY] No download URL in response")
                     return None
+                
+                logger.info(f"🔵 [PRIMARY] Download URL obtained, downloading...")
                 
                 # Determine file extension
                 ext = "mp4" if video else "mp3"
                 
                 # Download file
-                return await self.save_file(vid_id, dl_url, video, ext)
+                result = await self.save_file(vid_id, dl_url, video, ext)
+                if result:
+                    logger.info(f"✅ [PRIMARY] Successfully downloaded via YTProxy: {vid_id}")
+                return result
                 
+        except asyncio.TimeoutError:
+            logger.error("🔵 [PRIMARY] Timeout error")
+        except aiohttp.ClientError as e:
+            logger.error(f"🔵 [PRIMARY] Network error: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"🔵 [PRIMARY] Invalid JSON response: {e}")
         except Exception as e:
-            return None
+            logger.error(f"🔵 [PRIMARY] Unexpected error: {type(e).__name__}: {e}")
+        
+        return None
 
     # ================================================================
     # SECONDARY API – Shruti
@@ -147,42 +173,66 @@ class NexGenApi:
     async def _download_secondary(self, vid_id: str, video: bool = False) -> str | None:
         """Download using secondary Shruti API."""
         if not self.secondary_available:
+            logger.warning("⏭ Secondary API not configured, skipping...")
             return None
+
+        logger.info(f"🟠 [SECONDARY] Trying Shruti API for {vid_id}...")
 
         if video:
             endp = f"{self.shruti_api_url}/download?url={vid_id}&type=video&api_key={self.shruti_api_key}"
         else:
             endp = f"{self.shruti_api_url}/download?url={vid_id}&type=audio&api_key={self.shruti_api_key}"
 
-        for _ in range(self.retries):
+        for attempt in range(self.retries):
             try:
+                logger.info(f"🟠 [SECONDARY] Attempt {attempt + 1}/{self.retries}")
+                
                 async with self.session.get(endp, headers=self.headers) as resp:
                     content_type = resp.headers.get('Content-Type', '')
+                    logger.info(f"🟠 [SECONDARY] Content-Type: {content_type}")
                     
                     if 'application/json' in content_type:
                         data = await resp.json()
+                        logger.info(f"🟠 [SECONDARY] Response: {data}")
+                        
                         if resp.status != 200:
+                            logger.warning(f"🟠 [SECONDARY] HTTP {resp.status}")
                             return None
                         
                         status = data.get("status")
                         dl_link = data.get("link") or data.get("url")
                         
                         if (status == "done" or dl_link) and dl_link:
-                            return await self.save_file(vid_id, dl_link, video)
+                            logger.info(f"🟠 [SECONDARY] Download link obtained")
+                            result = await self.save_file(vid_id, dl_link, video)
+                            if result:
+                                logger.info(f"✅ [SECONDARY] Successfully downloaded via Shruti: {vid_id}")
+                            return result
                         elif status == "downloading":
+                            logger.info("🟠 [SECONDARY] Video still processing, waiting...")
                             await asyncio.sleep(4)
                             continue
                         else:
+                            logger.warning(f"🟠 [SECONDARY] Unknown status: {status}")
                             break
                     else:
                         # Direct file download
                         if resp.status == 200:
+                            logger.info("🟠 [SECONDARY] Direct file download")
                             ext = "mp4" if video else "mp3"
-                            return await self.save_file(vid_id, str(resp.url), video, ext)
+                            result = await self.save_file(vid_id, str(resp.url), video, ext)
+                            if result:
+                                logger.info(f"✅ [SECONDARY] Successfully downloaded via Shruti: {vid_id}")
+                            return result
                         else:
+                            logger.warning(f"🟠 [SECONDARY] HTTP {resp.status}")
                             return None
-            except Exception:
+            except asyncio.TimeoutError:
+                logger.error(f"🟠 [SECONDARY] Timeout on attempt {attempt + 1}")
+            except Exception as e:
+                logger.error(f"🟠 [SECONDARY] Error on attempt {attempt + 1}: {type(e).__name__}: {e}")
                 break
+        
         return None
 
     # ================================================================
@@ -196,8 +246,10 @@ class NexGenApi:
         """
         # Check cache
         if video and vid_id in self.v_cache:
+            logger.info(f"📦 Cache hit (video): {vid_id}")
             return self.v_cache[vid_id]
         elif not video and vid_id in self.dl_cache:
+            logger.info(f"📦 Cache hit (audio): {vid_id}")
             return self.dl_cache[vid_id]
 
         await self.get_session()
@@ -207,15 +259,17 @@ class NexGenApi:
             result = await self._download_primary(vid_id, video)
             if result:
                 return result
-        except Exception:
-            pass
+            logger.warning("⚠️ Primary API failed, falling back to Secondary API...")
+        except Exception as e:
+            logger.error(f"Primary API exception: {e}")
 
         # --- Attempt 2: Secondary API (Fallback) ---
         try:
             result = await self._download_secondary(vid_id, video)
             if result:
                 return result
-        except Exception:
-            pass
+            logger.warning("⚠️ Secondary API also failed")
+        except Exception as e:
+            logger.error(f"Secondary API exception: {e}")
 
         return None
