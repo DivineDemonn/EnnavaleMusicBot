@@ -19,9 +19,11 @@ from anony.helpers import NexGenApi, Track, utils
 class YouTube:
     """
     Enhanced YouTube handler with:
+      - Primary API: YTProxy (YTPROXY_URL + YT_API_KEY)
+      - Secondary API: Shruti (SHRUTI_API_URL + SHRUTI_API_KEY)
+      - yt-dlp fallback for maximum reliability
       - Forced high-bitrate OPUS stereo audio for Telegram VC.
       - Aggressive retry/network recovery settings.
-      - Clean fallback chains (Shruti API -> yt-dlp -> alternative formats).
     """
 
     def __init__(self):
@@ -31,7 +33,8 @@ class YouTube:
         self.checked = False
         self.cookie_dir = "anony/cookies"
         self.warned = False
-        # URL validation patterns (unchanged)
+        
+        # URL validation patterns
         self.regex = re.compile(
             r"(https?://)?(www\.|m\.|music\.)?"
             r"(youtube\.com/(watch\?v=|shorts/|playlist\?list=)|youtu\.be/)"
@@ -43,16 +46,18 @@ class YouTube:
             r"|playlist\?list=PL[A-Za-z0-9_-]+|[A-Za-z0-9_-]{11}))\S*"
         )
 
-        # Connect to Shruti API if provided
-        if config.SHRUTI_API_URL and config.SHRUTI_API_KEY:
-            self.api = NexGenApi(
-                config.SHRUTI_API_URL,
-                config.SHRUTI_API_KEY,
-                config.SHRUTI_API_URL,  # Using same URL for both audio and video
-            )
+        # Initialize multi-API handler with both primary and secondary
+        self.api = NexGenApi(
+            # Primary API
+            ytproxy_url=config.YTPROXY_URL,
+            yt_api_key=config.YT_API_KEY,
+            # Secondary API (fallback)
+            shruti_api_url=config.SHRUTI_API_URL,
+            shruti_api_key=config.SHRUTI_API_KEY,
+        )
 
     # ------------------------------------------------------------------
-    # Cookie handling (unchanged, still random & batbin-based)
+    # Cookie handling
     # ------------------------------------------------------------------
     def get_cookies(self):
         if not self.checked:
@@ -139,37 +144,39 @@ class YouTube:
         return tracks
 
     # ------------------------------------------------------------------
-    # 🔥 UPGRADED DOWNLOADER – High Quality & Network Resilient
+    # 🔥 UPGRADED DOWNLOADER – Multi-API with Fallback
     # ------------------------------------------------------------------
     async def download(self, video_id: str, video: bool = False) -> str | None:
         """
         Downloads audio/video with these priorities:
-          1. Shruti API (if available)
-          2. yt-dlp with high-quality OPUS (crystal stereo)
-          3. Fallback to best possible format in case of network issues.
+          1. Primary API (YTProxy)
+          2. Secondary API (Shruti) – if primary fails
+          3. yt-dlp with high-quality OPUS (crystal stereo)
+          4. Fallback to best possible format in case of network issues.
         """
         # --- PATH PREPARATION ---
-        ext = "mp4" if video else "webm"  # webm container holds OPUS natively
+        ext = "mp4" if video else "mp3"  # APIs return mp3/mp4
         filename = f"downloads/{video_id}.{ext}"
         Path("downloads").mkdir(parents=True, exist_ok=True)
 
-        if Path(filename).exists():
-            logger.info("Cache hit: %s", filename)
-            return filename
+        # Check if already downloaded in any format
+        for existing_ext in ["mp3", "mp4", "webm"]:
+            existing_file = f"downloads/{video_id}.{existing_ext}"
+            if Path(existing_file).exists():
+                logger.info("Cache hit: %s", existing_file)
+                return existing_file
 
-        # --- 1st ATTEMPT: Shruti API ---
-        if self.api:
-            try:
-                logger.info("Trying Shruti API for %s", video_id)
-                # Ensure session is initialized
-                await self.api.get_session()
-                file_path = await self.api.download(video_id, video)
-                if file_path and Path(file_path).exists():
-                    return file_path
-            except Exception as e:
-                logger.warning("Shruti API failed: %s", e)
+        # --- ATTEMPT 1 & 2: Primary → Secondary API ---
+        try:
+            logger.info("Trying API download for %s (Primary → Secondary)", video_id)
+            await self.api.get_session()
+            file_path = await self.api.download(video_id, video)
+            if file_path and Path(file_path).exists():
+                return file_path
+        except Exception as e:
+            logger.warning("API download failed: %s", e)
 
-        # --- 2nd ATTEMPT: yt-dlp with best OPUS stereo ---
+        # --- ATTEMPT 3: yt-dlp with best OPUS stereo ---
         url = self.base + video_id
         cookie = self.get_cookies()
 
@@ -183,7 +190,7 @@ class YouTube:
             "overwrites": False,
             "nocheckcertificate": True,
             "cookiefile": cookie,
-            # --- NETWORK RESILIENCE (new) ---
+            # --- NETWORK RESILIENCE ---
             "retries": 10,
             "fragment_retries": 10,
             "extractor_retries": 5,
@@ -202,12 +209,10 @@ class YouTube:
             }
         else:
             # 🎵 AUDIO: prefer OPUS in webm, fallback to best audio overall
-            #    OPUS delivers stereo and high efficiency for Telegram VC.
             ydl_opts = {
                 **base_opts,
                 "format": "bestaudio[acodec=opus]/bestaudio",
-                # Keep the native container (webm) – no re-encoding
-                "postprocessors": [],   # disable any automatic conversion
+                "postprocessors": [],  # Keep native container
             }
 
         def _download():
@@ -222,23 +227,23 @@ class YouTube:
                 return None
             return filename
 
-        # Run blocking download in thread (with a generous timeout)
+        # Run blocking download in thread
         try:
             result = await asyncio.wait_for(
                 asyncio.to_thread(_download),
-                timeout=120,  # 2 minutes for large files
+                timeout=120,
             )
             if result and Path(result).exists():
                 return result
         except asyncio.TimeoutError:
             logger.error("Download timed out for %s", url)
 
-        # --- 3rd ATTEMPT: last-resort fallback (any best audio) ---
+        # --- ATTEMPT 4: Last-resort fallback ---
         if not video:
             logger.warning("Primary download failed. Trying fallback format (bestaudio).")
             fallback_opts = {
                 **base_opts,
-                "format": "bestaudio",  # totally unrestricted
+                "format": "bestaudio",
                 "postprocessors": [],
             }
             def _fallback():
@@ -256,3 +261,8 @@ class YouTube:
                 logger.error("Fallback download also failed: %s", e)
 
         return None
+
+    async def close(self):
+        """Clean up API session."""
+        if self.api:
+            await self.api.close_session()
