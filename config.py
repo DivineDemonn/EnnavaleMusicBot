@@ -28,7 +28,7 @@ class Config:
         
         # Primary API (YTProxy)
         self.YTPROXY_URL = getenv("YTPROXY_URL", "https://tgapi.xbitcode.com")
-        self.YT_API_KEY = getenv("YT_API_KEY", 'xbit_2xzK5CPcuuEqY16rZh5ytbSyPKEPTpf2')
+        self.YT_API_KEY = getenv("YT_API_KEY", "xbit_2xzK5CPcuuEqY16rZh5ytbSyPKEPTpf2")
 
         # Secondary API (Shruti) - Fallback
         self.SHRUTI_API_URL = getenv("SHRUTI_API_URL", "https://api.shrutibots.site")
