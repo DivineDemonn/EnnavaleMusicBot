@@ -49,7 +49,7 @@ class Config:
         ]
         self.DEFAULT_THUMB = getenv("DEFAULT_THUMB", "https://te.legra.ph/file/3e40a408286d4eda24191.jpg")
         self.PING_IMG = getenv("PING_IMG", "https://graph.org/file/5a4ab4d41f53c49c58c96-72c3a68a254b13ba08.jpg")
-        self.START_IMG = getenv("START_IMG", "https://graph.org/file/02f22d5f4ebb4c23492bc-916ac01b0bcd80384c.jpg")
+        self.START_IMG = getenv("START_IMG", "https://graph.org/file/38faf3d9b33aef8054bd1-0e47e05f329c30052d.jpg")
         
 
     def check(self):
