@@ -23,8 +23,8 @@ class Config:
         self.SESSION2 = getenv("SESSION2", None)
         self.SESSION3 = getenv("SESSION3", None)
 
-        self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/UnhealedNotes")
-        self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/+rfyqdrIu7txlYjk0")
+        self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/+JIPV5-IFXK9kNDc9")
+        self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/+JIPV5-IFXK9kNDc9")
         
         # Primary API (YTProxy)
         self.YTPROXY_URL = getenv("YTPROXY_URL", "https://tgapi.xbitcode.com")
@@ -32,7 +32,7 @@ class Config:
 
         # Secondary API (Shruti) - Fallback
         self.SHRUTI_API_URL = getenv("SHRUTI_API_URL", "https://api.shrutibots.site")
-        self.SHRUTI_API_KEY = getenv("SHRUTI_API_KEY", "ShrutiBotsguDA4JWhgxUcQYiwkfmg")
+        self.SHRUTI_API_KEY = getenv("SHRUTI_API_KEY", "ShrutiBotsI0DYMO2LfNDMOw2PPm8E")
         
 
         self.AUTO_LEAVE: bool = getenv("AUTO_LEAVE", "False").lower() == "true"
