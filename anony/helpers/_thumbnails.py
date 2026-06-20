@@ -216,7 +216,7 @@ class Thumbnail:
             )
 
             # Brand pill
-            pill_text = "ENNAVALEMUSICBOT"
+            pill_text = "TAMILPASANNGA"
             pill_tw = get_text_width(draw, pill_text, self.font_pill)
             pill_cx = rx + (bar_w // 2)
             time_y = 325
