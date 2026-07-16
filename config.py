@@ -23,11 +23,11 @@ class Config:
         self.SESSION2 = getenv("SESSION2", None)
         self.SESSION3 = getenv("SESSION3", None)
 
-        self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/dhiyabots")
-        self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/dhiya_support")
+        self.SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/+IJ8j7yERjRU0YzMx")
+        self.SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/+IJ8j7yERjRU0YzMx")
         
         self.ARC_API_URL = getenv("ARC_API_URL", "https://api.arcmusic.fun")
-        self.ARC_API_KEY = getenv("ARC_API_KEY", "")   # get from arcmusic console
+        self.ARC_API_KEY = getenv("ARC_API_KEY", "ARCc3992fe914d745732fc4eb")   # get from arcmusic console
 
         self.AUTO_LEAVE: bool = getenv("AUTO_LEAVE", "False").lower() == "true"
         self.AUTO_END: bool = getenv("AUTO_END", "False").lower() == "true"
