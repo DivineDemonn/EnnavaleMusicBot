@@ -13,6 +13,10 @@ class ArcApi:
         self.chunk_limit = 128 * 1024
         self.session: aiohttp.ClientSession | None = None
 
+    async def get_session(self):
+        """Public method to initialize the session."""
+        await self._get_session()
+
     async def _get_session(self):
         if not self.session:
             self.session = aiohttp.ClientSession(timeout=self.timeout)
