@@ -4,7 +4,7 @@
 
 
 from ._admins import admin_check, can_manage_vc, is_admin, reload_admins
-from .arcapi import ArcApi
+from ._api import NexGenApi
 from ._dataclass import Media, Track
 from ._exec import format_exception, meval
 from ._inline import Inline
