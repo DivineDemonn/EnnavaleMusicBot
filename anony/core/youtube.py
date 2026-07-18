@@ -9,18 +9,16 @@ import random
 import asyncio
 import aiohttp
 from pathlib import Path
-from typing import Optional
 
 from py_yt import Playlist, VideosSearch
 
 from anony import config, logger
-from anony.helpers import Track, utils
-from anony.helpers.arcapi import ArcApi
+from anony.helpers import ArcApi, Track, utils   # <-- import ArcApi
 
 
 class YouTube:
     def __init__(self):
-        self.api: Optional[ArcApi] = None
+        self.api = None
         self.base = "https://www.youtube.com/watch?v="
         self.cookies = []
         self.checked = False
@@ -37,44 +35,103 @@ class YouTube:
             r"|playlist\?list=PL[A-Za-z0-9_-]+|[A-Za-z0-9_-]{11}))\S*"
         )
 
-        # Initialize Arc API if configured
+        # Use ArcApi if the required config is present
         if config.ARC_API_URL and config.ARC_API_KEY:
-            self.api = ArcApi()
-            logger.info("Arc API initialized for YouTube downloads")
+            self.api = ArcApi(
+                config.ARC_API_URL,
+                config.ARC_API_KEY
+            )
+            logger.info("ArcApi enabled for YouTube downloads.")
+        else:
+            logger.info("ArcApi not configured – falling back to yt-dlp only.")
 
-    async def download(self, video_id: str, video: bool = False) -> Optional[str]:
-        """
-        Download YouTube content with fallback strategy:
-        1. Try Arc API first (if configured)
-        2. Fallback to yt-dlp
-        
-        Args:
-            video_id: YouTube video ID
-            video: True for video, False for audio only
-            
-        Returns:
-            Path to downloaded file or None
-        """
-        # 1. Try Arc API first
+    def get_cookies(self):
+        if not self.checked:
+            for file in os.listdir(self.cookie_dir):
+                if file.endswith(".txt"):
+                    self.cookies.append(f"{self.cookie_dir}/{file}")
+            self.checked = True
+        if not self.cookies:
+            if not self.warned:
+                self.warned = True
+                logger.warning("Cookies are missing; downloads might fail.")
+            return None
+        return random.choice(self.cookies)
+
+    async def save_cookies(self, urls: list[str]) -> None:
+        logger.info("Saving cookies from urls...")
+        async with aiohttp.ClientSession() as session:
+            for url in urls:
+                name = url.split("/")[-1]
+                link = "https://batbin.me/raw/" + name
+                async with session.get(link) as resp:
+                    resp.raise_for_status()
+                    with open(f"{self.cookie_dir}/{name}.txt", "wb") as fw:
+                        fw.write(await resp.read())
+        logger.info(f"Cookies saved in {self.cookie_dir}.")
+
+    def valid(self, url: str) -> bool:
+        return bool(re.match(self.regex, url))
+
+    def invalid(self, url: str) -> bool:
+        return bool(re.match(self.iregex, url))
+
+    async def search(self, query: str, m_id: int, video: bool = False) -> Track | None:
+        try:
+            _search = VideosSearch(query, limit=1, with_live=False)
+            results = await _search.next()
+        except Exception:
+            return None
+        if results and results["result"]:
+            data = results["result"][0]
+            return Track(
+                id=data.get("id"),
+                channel_name=data.get("channel", {}).get("name"),
+                duration=data.get("duration"),
+                duration_sec=utils.to_seconds(data.get("duration")),
+                message_id=m_id,
+                title=data.get("title")[:25],
+                thumbnail=data.get("thumbnails", [{}])[-1].get("url").split("?")[0],
+                url=data.get("link"),
+                view_count=data.get("viewCount", {}).get("short"),
+                video=video,
+            )
+        return None
+
+    async def playlist(self, limit: int, user: str, url: str, video: bool) -> list[Track | None]:
+        tracks = []
+        try:
+            plist = await Playlist.get(url)
+            for data in plist["videos"][:limit]:
+                track = Track(
+                    id=data.get("id"),
+                    channel_name=data.get("channel", {}).get("name", ""),
+                    duration=data.get("duration"),
+                    duration_sec=utils.to_seconds(data.get("duration")),
+                    title=data.get("title")[:25],
+                    thumbnail=data.get("thumbnails")[-1].get("url").split("?")[0],
+                    url=data.get("link").split("&list=")[0],
+                    user=user,
+                    view_count="",
+                    video=video,
+                )
+                tracks.append(track)
+        except Exception:
+            pass
+        return tracks
+
+    async def download(self, video_id: str, video: bool = False) -> str | None:
+        # 1) Try ArcApi if configured
         if self.api:
-            logger.info(f"Attempting download via Arc API: {video_id}")
-            try:
-                result = await self.api.download(video_id, video)
-                if result:
-                    logger.info(f"Successfully downloaded via Arc API: {result}")
-                    return result
-            except Exception as e:
-                logger.warning(f"Arc API download failed: {e}, falling back to yt-dlp")
+            if file_path := await self.api.download(video_id, video):
+                return file_path
 
-        # 2. Fallback to yt-dlp
-        logger.info(f"Downloading via yt-dlp: {video_id}")
+        # 2) Fallback to yt-dlp (with cookies)
         url = self.base + video_id
         ext = "mp4" if video else "webm"
         filename = f"downloads/{video_id}.{ext}"
 
-        # Return cached file if exists
         if Path(filename).exists():
-            logger.info(f"Using cached file: {filename}")
             return filename
 
         cookie = self.get_cookies()
@@ -102,20 +159,14 @@ class YouTube:
             }
 
         def _download():
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                try:
                     ydl.download([url])
-                return filename
-            except (yt_dlp.utils.DownloadError, yt_dlp.utils.ExtractorError) as e:
-                logger.warning(f"yt-dlp download error: {e}")
-                return None
-            except Exception as ex:
-                logger.warning("Download failed: %s", ex)
-                return None
+                except (yt_dlp.utils.DownloadError, yt_dlp.utils.ExtractorError):
+                    return None
+                except Exception as ex:
+                    logger.warning("Download failed: %s", ex)
+                    return None
+            return filename
 
         return await asyncio.to_thread(_download)
-
-    async def close(self):
-        """Clean up resources."""
-        if self.api:
-            await self.api.close()
