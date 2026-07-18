@@ -1,3 +1,4 @@
+# anony/helpers/_api.py
 # Copyright (c) 2025 AnonymousX1025
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
@@ -32,17 +33,21 @@ class ArcApi:
             self.session = aiohttp.ClientSession(timeout=self.timeout)
 
     async def _poll_job(self, job_id: str) -> str | None:
-        """Poll /youtube/jobStatus until status is 'done' and return public_url."""
+        """Poll /youtube/jobStatus until the job is 'done' and return public_url."""
         url = f"{self.api_url}/youtube/jobStatus"
         params = {"api_key": self.api_key, "job_id": job_id}
-        for _ in range(self.retries):
+        logger.info(f"ArcApi: Polling job {job_id} ...")
+        for attempt in range(self.retries):
             try:
                 async with self.session.get(url, params=params, headers=self.headers) as resp:
-                    if resp.status != 200:
-                        await asyncio.sleep(3)
-                        continue
                     data = await resp.json()
-            except Exception:
+                    logger.debug(f"ArcApi: Poll attempt {attempt+1} – {data}")
+            except Exception as e:
+                logger.warning(f"ArcApi: Poll error: {e}")
+                await asyncio.sleep(3)
+                continue
+
+            if resp.status != 200:
                 await asyncio.sleep(3)
                 continue
 
@@ -54,11 +59,12 @@ class ArcApi:
             job = data.get("job", {})
             if isinstance(job, dict) and job.get("status") == "done":
                 result = job.get("result", {})
-                if isinstance(result, dict):
-                    pub_url = result.get("public_url")
-                    if pub_url:
-                        return pub_url
+                pub_url = result.get("public_url") if isinstance(result, dict) else None
+                if pub_url:
+                    logger.info(f"ArcApi: Poll finished, public_url: {pub_url}")
+                    return pub_url
             await asyncio.sleep(3)
+        logger.warning(f"ArcApi: Polling exhausted for job {job_id}")
         return None
 
     async def _get_download_link(self, vid_id: str, video: bool) -> str | None:
@@ -69,53 +75,81 @@ class ArcApi:
             "query": vid_id,
             "isVideo": str(video).lower(),
         }
-        for _ in range(self.retries):
+        logger.info(f"ArcApi: Requesting download for {vid_id} (video={video})")
+        for attempt in range(self.retries):
             try:
                 async with self.session.get(url, params=params, headers=self.headers) as resp:
-                    if resp.status != 200:
-                        await asyncio.sleep(2)
-                        continue
                     data = await resp.json()
-            except Exception:
+                    logger.debug(f"ArcApi: Attempt {attempt+1} response: {data}")
+            except Exception as e:
+                logger.warning(f"ArcApi: Request error: {e}")
                 await asyncio.sleep(2)
                 continue
 
-            # Direct public_url in response
-            candidate = data.get("public_url")
-            if candidate and "processing" not in candidate.lower() and "queued" not in candidate.lower():
-                return candidate
+            if resp.status != 200:
+                logger.warning(f"ArcApi: HTTP {resp.status} from download endpoint")
+                await asyncio.sleep(2)
+                continue
 
-            # Check job object
+            # Try all possible locations for the final URL (mirrors Go extractCandidate)
+            candidate = (
+                self._extract_from(data, "public_url") or
+                self._extract_from(data, "download_url") or
+                self._extract_from(data, "link")  # fallback for different API shapes
+            )
+            if candidate:
+                candidate = self._normalize_url(candidate)
+                if "processing" not in candidate.lower() and "queued" not in candidate.lower():
+                    logger.info(f"ArcApi: Direct URL found: {candidate}")
+                    return candidate
+
+            # Check nested "job" object
             job = data.get("job", {})
             if isinstance(job, dict):
                 result = job.get("result", {})
-                if isinstance(result, dict):
-                    pub_url = result.get("public_url")
-                    if pub_url:
-                        return pub_url
+                pub_url = self._extract_from(result, "public_url") if isinstance(result, dict) else None
+                if pub_url:
+                    pub_url = self._normalize_url(pub_url)
+                    logger.info(f"ArcApi: URL from job.result: {pub_url}")
+                    return pub_url
+
                 job_id = job.get("id")
-                if job_id and job.get("status") in ("queued", "processing"):
+                job_status = job.get("status", "")
+                if job_id and job_status in ("queued", "processing"):
+                    logger.info(f"ArcApi: Job {job_id} is {job_status}, starting poll...")
                     pub_url = await self._poll_job(job_id)
                     if pub_url:
                         return pub_url
 
-            # Last resort: any public_url anywhere
-            for key in ("public_url", "download_url"):
-                val = data.get(key)
-                if val and "processing" not in val.lower() and "queued" not in val.lower():
-                    return val
-
             await asyncio.sleep(2)
+        logger.warning(f"ArcApi: Failed to get download link for {vid_id} after {self.retries} attempts")
         return None
+
+    def _extract_from(self, data: dict, *keys: str) -> str | None:
+        """Safely extract a string from a dict by trying multiple keys."""
+        for key in keys:
+            val = data.get(key)
+            if val and isinstance(val, str) and val.strip():
+                return val.strip()
+        return None
+
+    def _normalize_url(self, url: str) -> str:
+        """Make a URL absolute if it's relative, using the API base."""
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        if url.startswith("/"):
+            return self.api_url + url
+        return f"{self.api_url}/{url}"
 
     async def save_file(self, vid_id: str, url: str, video: bool = False) -> str | None:
         """Download the file from the given URL and return the local path."""
+        logger.info(f"ArcApi: Saving file from {url}")
         try:
             async with self.session.get(url) as resp:
                 if resp.status != 200:
+                    logger.warning(f"ArcApi: File download HTTP {resp.status}")
                     return None
 
-                # Determine filename from headers or fallback
                 file_name = None
                 cd = resp.headers.get("Content-Disposition")
                 if cd:
@@ -131,20 +165,20 @@ class ArcApi:
                         if chunk:
                             await f.write(chunk)
 
-                # Update cache
                 if video:
                     self.v_cache[vid_id] = fname
                 else:
                     self.dl_cache[vid_id] = fname
 
+                logger.info(f"ArcApi: File saved as {fname}")
                 return fname
         except Exception as e:
-            logger.warning("ArcApi save_file error: %s", e)
+            logger.warning(f"ArcApi: save_file error: {e}")
         return None
 
     async def download(self, vid_id: str, video: bool = False) -> str | None:
         """Main entry point – get download link, then save file."""
-        # Check cache first
+        # Check cache
         if video and vid_id in self.v_cache:
             return self.v_cache[vid_id]
         elif not video and vid_id in self.dl_cache:
