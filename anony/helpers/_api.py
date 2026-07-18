@@ -15,8 +15,8 @@ class ArcApi:
         self,
         api_url: str,
         api_key: str,
-        retries: int = 20,        # enough for polling
-        timeout: int = 60,        # longer total timeout
+        retries: int = 20,
+        timeout: int = 60,
     ):
         self.api_url = api_url.rstrip("/")
         self.api_key = api_key
@@ -32,8 +32,18 @@ class ArcApi:
         if not self.session:
             self.session = aiohttp.ClientSession(timeout=self.timeout)
 
+    def _normalize_url(self, url: str) -> str:
+        """Make the URL absolute using the API base."""
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        # If it starts with /, prepend the API base
+        if url.startswith("/"):
+            return self.api_url + url
+        # Otherwise assume it's a path relative to the API root
+        return f"{self.api_url}/{url}"
+
     async def _poll_job(self, job_id: str) -> str | None:
-        """Poll /youtube/jobStatus until the job is 'done' and return the public_url."""
+        """Poll /youtube/jobStatus until the job is 'done' and return the full public URL."""
         url = f"{self.api_url}/youtube/jobStatus"
         params = {"api_key": self.api_key, "job_id": job_id}
         logger.info(f"ArcApi: Starting poll for job {job_id}")
@@ -53,21 +63,22 @@ class ArcApi:
 
             status = data.get("status")
             if status == "success":
-                # Check inside job.result
                 job = data.get("job", {})
                 if isinstance(job, dict) and job.get("status") == "done":
                     result = job.get("result", {})
                     pub_url = result.get("public_url") if isinstance(result, dict) else None
                     if pub_url:
-                        logger.info(f"ArcApi: Job done, public_url={pub_url}")
-                        return pub_url
-                # Sometimes the URL might be directly in data
+                        abs_url = self._normalize_url(pub_url)
+                        logger.info(f"ArcApi: Job done, absolute URL: {abs_url}")
+                        return abs_url
+                # Direct keys in data (fallback)
                 for key in ("public_url", "download_url", "link"):
                     val = data.get(key)
                     if isinstance(val, str) and val.strip():
-                        logger.info(f"ArcApi: Direct URL after success: {val}")
-                        return self._normalize_url(val.strip())
-            elif status == "queued" or status == "processing":
+                        abs_url = self._normalize_url(val.strip())
+                        logger.info(f"ArcApi: Direct URL after success: {abs_url}")
+                        return abs_url
+            elif status in ("queued", "processing"):
                 await asyncio.sleep(3)
                 continue
             else:
@@ -77,7 +88,7 @@ class ArcApi:
         return None
 
     async def _get_download_link(self, vid_id: str, video: bool) -> str | None:
-        """Call the v2 download endpoint and return the final public URL."""
+        """Call the v2 download endpoint and return the final public URL (absolute)."""
         url = f"{self.api_url}/youtube/v2/download"
         params = {
             "api_key": self.api_key,
@@ -85,7 +96,7 @@ class ArcApi:
             "isVideo": str(video).lower(),
         }
         logger.info(f"ArcApi: Requesting {url} params={params}")
-        for attempt in range(2):  # try twice to start a download
+        for attempt in range(2):
             try:
                 async with self.session.get(url, params=params, headers=self.headers) as resp:
                     data = await resp.json()
@@ -93,7 +104,7 @@ class ArcApi:
                     if resp.status != 200:
                         continue
 
-                    # If already done, extract direct URL
+                    # Immediate direct URL
                     for key in ("public_url", "download_url", "link"):
                         val = data.get(key)
                         if isinstance(val, str) and val.strip():
@@ -102,26 +113,17 @@ class ArcApi:
                                 logger.info(f"ArcApi: Immediate direct URL: {candidate}")
                                 return candidate
 
-                    # If queued, poll the job
                     status = data.get("status")
-                    if status == "queued" or status == "processing":
+                    if status in ("queued", "processing"):
                         job_id = data.get("job_id") or (data.get("job", {}) or {}).get("id")
                         if job_id:
                             pub_url = await self._poll_job(job_id)
                             if pub_url:
                                 return pub_url
-                    # Other statuses – retry
             except Exception as e:
                 logger.error(f"ArcApi: Download exception: {e}")
             await asyncio.sleep(2)
         return None
-
-    def _normalize_url(self, url: str) -> str:
-        if url.startswith("http://") or url.startswith("https://"):
-            return url
-        if url.startswith("/"):
-            return self.api_url + url
-        return f"{self.api_url}/{url}"
 
     async def save_file(self, vid_id: str, url: str, video: bool = False) -> str | None:
         logger.info(f"ArcApi: Downloading file from {url}")
