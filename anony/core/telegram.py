@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-
 import asyncio
 import os
 import time
@@ -58,7 +57,8 @@ class Telegram:
             await sent.edit_text(sent.lang["play_duration_limit"].format(config.DURATION_LIMIT // 60))
             return await sent.stop_propagation()
 
-        if file_size > 200 * 1024 * 1024:
+        # 👇 Changed: previously limited to 200 MB, now 4 GB
+        if file_size > 4 * 1024 * 1024 * 1024:   # 4 GB
             await sent.edit_text(sent.lang["dl_limit"])
             return await sent.stop_propagation()
 
