@@ -371,7 +371,7 @@ class Inline:
                 [
                     self.button(
                         text=lang.get("Owner", "Owner"),
-                        url="https://t.me/Samjacobx",
+                        url="https://t.me/ItsHeavenlyDemon",
                         style=ButtonStyle.DANGER,
                     )
                 ]
