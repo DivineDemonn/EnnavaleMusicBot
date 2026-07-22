@@ -9,9 +9,9 @@ import re
 import aiohttp
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
-# Adjust these imports to match your project structure
-from your_project import config
-from your_project.helpers import Track
+
+from anony import config
+from anony.helpers import Track
 
 
 def get_text_width(draw, text, font):
