@@ -1,16 +1,17 @@
+# thumbnail.py
 # Copyright (c) 2025 AnonymousX1025
 # Licensed under the MIT License.
-# This file is part of AnonXMusic
+# Enhanced Apple Music‑style thumbnail generator.
 
-
+import asyncio
 import os
 import re
 import aiohttp
-from PIL import (Image, ImageDraw, ImageEnhance,
-                 ImageFilter, ImageFont, ImageOps)
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
-from anony import config
-from anony.helpers import Track
+# Adjust these imports to match your project structure
+from your_project import config
+from your_project.helpers import Track
 
 
 def get_text_width(draw, text, font):
@@ -79,8 +80,8 @@ def safe_load_font(font_path, size):
     """Safely load a font with fallbacks."""
     fonts_to_try = [
         font_path,
-        "anony/helpers/Raleway-Bold.ttf",
-        "anony/helpers/Inter-Light.ttf",
+        "your_project/helpers/Raleway-Bold.ttf",
+        "your_project/helpers/Inter-Light.ttf",
         "arial.ttf",
         "DejaVuSans.ttf",
         "FreeSans.ttf",
@@ -96,54 +97,80 @@ def safe_load_font(font_path, size):
 
 
 class Thumbnail:
+    """
+    Generates an Apple Music‑style player card for a given track.
+    Usage:
+        thumb = Thumbnail()
+        await thumb.start()
+        path = await thumb.generate(track, progress=0.45)
+        await thumb.close()
+    """
+
     def __init__(self):
-        self.rect = (500, 500)
-        self.fill = (255, 255, 255, 255)
-        self.mask = Image.new("L", self.rect, 0)
         self.session: aiohttp.ClientSession | None = None
-        
-        # Modern design fonts
-        self.font_title = safe_load_font("anony/helpers/Raleway-Bold.ttf", 46)
-        self.font_artist = safe_load_font("anony/helpers/Inter-Light.ttf", 26)
-        self.font_time = safe_load_font("anony/helpers/Inter-Light.ttf", 16)
-        self.font_pill = safe_load_font("anony/helpers/Raleway-Bold.ttf", 16)
+
+        # Load fonts (fallback to default if not found)
+        self.font_title = safe_load_font("your_project/helpers/Raleway-Bold.ttf", 46)
+        self.font_artist = safe_load_font("your_project/helpers/Inter-Light.ttf", 26)
+        self.font_time = safe_load_font("your_project/helpers/Inter-Light.ttf", 16)
+        self.font_pill = safe_load_font("your_project/helpers/Raleway-Bold.ttf", 16)
 
     async def start(self) -> None:
-        self.session = aiohttp.ClientSession()
+        """Initialize the HTTP session."""
+        if self.session is None:
+            self.session = aiohttp.ClientSession()
 
     async def close(self) -> None:
+        """Close the HTTP session."""
         if self.session:
             await self.session.close()
+            self.session = None
 
-    async def save_thumb(self, output_path: str, url: str) -> str:
+    async def _download_thumb(self, url: str, path: str) -> str:
+        """Download the thumbnail image from URL to local path."""
         async with self.session.get(url) as resp:
-            with open(output_path, "wb") as f:
+            resp.raise_for_status()
+            with open(path, "wb") as f:
                 f.write(await resp.read())
-        return output_path
+        return path
 
-    async def generate(self, song: Track, size=(1280, 720)) -> str:
+    async def generate(self, song: Track, progress: float = 0.25, size=(1280, 720)) -> str:
+        """
+        Generate the thumbnail image.
+        :param song: Track object with attributes: id, thumbnail, title, channel_name, duration
+        :param progress: float between 0 and 1 indicating playback progress
+        :param size: (width, height) of the output image
+        :return: path to the generated PNG file
+        """
+        if self.session is None:
+            await self.start()
+
+        temp_path = f"cache/temp_{song.id}.jpg"
+        output_path = f"cache/{song.id}.png"
+
+        # Return cached if exists
+        if os.path.exists(output_path):
+            return output_path
+
         try:
-            temp = f"cache/temp_{song.id}.jpg"
-            output = f"cache/{song.id}.png"
-            if os.path.exists(output):
-                return output
-
-            await self.save_thumb(temp, song.thumbnail)
-            
-            # Open thumbnail as album art
-            album_art = Image.open(temp).convert("RGBA")
+            # Download album art
+            await self._download_thumb(song.thumbnail, temp_path)
+            album_art = Image.open(temp_path).convert("RGBA")
 
             # --- 1. BLURRED BACKGROUND ---
             canvas = Image.new("RGBA", size, (0, 0, 0, 255))
             bg_blurred = album_art.resize(size, Image.LANCZOS)
-            bg_blurred = bg_blurred.filter(ImageFilter.GaussianBlur(15))
+            bg_blurred = bg_blurred.filter(ImageFilter.GaussianBlur(40))
             canvas.paste(bg_blurred, (0, 0))
 
-            # Dark overlay for contrast
-            overlay = Image.new("RGBA", size, (0, 0, 0, 80))
-            canvas = Image.alpha_composite(canvas, overlay)
+            # Dark gradient overlay (top to bottom)
+            gradient = Image.new("RGBA", size, (0, 0, 0, 0))
+            grad_draw = ImageDraw.Draw(gradient)
+            for y in range(size[1]):
+                alpha = int(120 - 100 * (y / size[1]))  # darker at top, lighter at bottom
+                grad_draw.line([(0, y), (size[0], y)], fill=(0, 0, 0, alpha))
+            canvas = Image.alpha_composite(canvas, gradient)
 
-            # Shapes layer for translucent elements
             shapes_layer = Image.new("RGBA", size, (0, 0, 0, 0))
             draw_shapes = ImageDraw.Draw(shapes_layer)
             draw = ImageDraw.Draw(canvas)
@@ -156,13 +183,13 @@ class Thumbnail:
             cover = album_art.resize((cover_size, cover_size), Image.LANCZOS)
             cover = apply_rounded_corners(cover, 35)
 
-            # Shadow behind cover
+            # Shadow behind cover (soft drop shadow)
             shadow = Image.new("RGBA", (cover_size + 40, cover_size + 40), (0, 0, 0, 0))
             shadow_draw = ImageDraw.Draw(shadow)
             shadow_draw.rounded_rectangle(
-                (20, 20, cover_size + 20, cover_size + 20), 40, fill=(0, 0, 0, 120)
+                (20, 20, cover_size + 20, cover_size + 20), 40, fill=(0, 0, 0, 180)
             )
-            shadow = shadow.filter(ImageFilter.GaussianBlur(20))
+            shadow = shadow.filter(ImageFilter.GaussianBlur(25))
             canvas.alpha_composite(shadow, (cover_x - 20, cover_y - 20))
             canvas.paste(cover, (cover_x, cover_y), cover)
 
@@ -173,7 +200,7 @@ class Thumbnail:
             gray_text = (200, 200, 200, 255)
             black = (0, 0, 0, 255)
 
-            # Title
+            # Title (trim if too long)
             title_text = trim_text(draw, song.title, self.font_title, 430)
             draw.text((rx, 140), title_text, font=self.font_title, fill=white)
 
@@ -197,9 +224,8 @@ class Thumbnail:
                 outline=white, width=2
             )
             # Three dots
-            draw.ellipse((1158, 155, 1162, 159), fill=white)
-            draw.ellipse((1158, 163, 1162, 167), fill=white)
-            draw.ellipse((1158, 171, 1162, 175), fill=white)
+            for y_off in (155, 163, 171):
+                draw.ellipse((1158, y_off, 1162, y_off + 4), fill=white)
 
             # Artist name
             artist = get_real_artist(song.title, song.channel_name).upper()
@@ -216,7 +242,7 @@ class Thumbnail:
             )
 
             # Brand pill
-            pill_text = "ENNAVALEMUSICBOT"
+            pill_text = "YOURBOTNAME"  # Change to your bot's name
             pill_tw = get_text_width(draw, pill_text, self.font_pill)
             pill_cx = rx + (bar_w // 2)
             time_y = 325
@@ -231,17 +257,19 @@ class Thumbnail:
             canvas = Image.alpha_composite(canvas, shapes_layer)
             draw = ImageDraw.Draw(canvas)
 
-            # Filled progress (25%)
-            filled_w = int(bar_w * 0.25)
+            # Filled progress (based on `progress` parameter)
+            filled_w = int(bar_w * max(0, min(1, progress)))
             draw.rounded_rectangle(
                 (rx, bar_y, rx + filled_w, bar_y + 8), radius=4, fill=white
             )
 
-            # Circular handle
-            draw.ellipse(
-                (rx + filled_w - 8, bar_y - 4, rx + filled_w + 8, bar_y + 12),
-                fill=white
-            )
+            # Circular handle (only if progress > 0)
+            if filled_w > 0:
+                handle_x = rx + filled_w
+                draw.ellipse(
+                    (handle_x - 8, bar_y - 4, handle_x + 8, bar_y + 12),
+                    fill=white
+                )
 
             # Timestamps
             draw.text((rx, time_y), "0:01", font=self.font_time, fill=white)
@@ -262,7 +290,7 @@ class Thumbnail:
             cy = 480
             cx = rx + (bar_w // 2)
 
-            # Pause button
+            # Pause button (two vertical bars)
             p_w = 10
             p_h = 44
             p_space = 8
@@ -322,13 +350,13 @@ class Thumbnail:
                 270, 90, fill=white, width=2
             )
 
-            # Volume bar
+            # Volume bar (full white)
             draw.rounded_rectangle(
                 (sx + 45, vol_y - 3, sx + vol_len, vol_y + 3),
                 radius=3, fill=white
             )
 
-            # --- 7. BOTTOM UI ---
+            # --- 7. BOTTOM UI (queue/chat) ---
             bot_y = 620
             cx_chat = cx - 40
             draw.rounded_rectangle(
@@ -343,7 +371,7 @@ class Thumbnail:
             draw.rectangle((cx_chat + 8, bot_y - 5, cx_chat + 11, bot_y + 2), fill=white)
             draw.rectangle((cx_chat + 14, bot_y - 5, cx_chat + 17, bot_y + 2), fill=white)
 
-            # Queue icon
+            # Queue icon (three lines with dots)
             lx = cx + 40
             ly = bot_y - 12
             for i in range(3):
@@ -352,18 +380,19 @@ class Thumbnail:
                 draw.rectangle((lx + 10, y_off + 1, lx + 36, y_off + 3), fill=white)
 
             # --- 8. SAVE ---
-            image = canvas
-            image.save(output, quality=100)
+            canvas.save(output_path, quality=100)
             album_art.close()
             canvas.close()
 
+            # Clean up temp
             try:
-                os.remove(temp)
+                os.remove(temp_path)
             except Exception:
                 pass
 
-            return output
+            return output_path
 
         except Exception as e:
             print(f"Thumbnail generation error: {e}")
+            # Return a default thumbnail (you can set a fallback image)
             return config.DEFAULT_THUMB
