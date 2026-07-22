@@ -110,8 +110,8 @@
     "queue_fetching": "Fetching queue...",
     "restarting": "Restarting...",
     "restarted": "Restart in progress. Don't worry, it'll only take a few seconds… maybe.",
-    "start_pm": "![👋](tg://emoji?id=5454390891466726015) Hey {0},\nThis is {1} !\n\n![🎧](tg://emoji?id=5947042989145590769) A music player bot with some awesome and useful features.\n\n<b><i>![ℹ️](tg://emoji?id=5960842268096073715) Click on the help button for more info.</i></b>",
-    "start_gp": "![👋](tg://emoji?id=5454390891466726015) Hey,\nThis is {0}\n\n<u><b>![🎧](tg://emoji?id=5947042989145590769) A music player bot with some awesome and useful features.</b></u>",
+    "start_pm": "![👋](tg://emoji?id=5454390891466726015) 𝗛𝗲𝘆 {0},\n\n𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝗍𝗈 {1} ♪ 🎶\n\n![🎧](tg://emoji?id=5947042989145590769) <b>Your Ultimate Telegram Music Companion.</b>\n<i>Fast • Smooth • High Quality Music Streaming ⚡</i>\n\n![✨](tg://emoji?id=5960842268096073715) <b><i>Tap the Help button below to explore all commands & features.</i></b>",
+    "start_gp": "![👋](tg://emoji?id=5454390891466726015) 𝗛𝗲𝗹𝗹𝗼 𝗘𝘃𝗲𝗿𝘆𝗼𝗻𝗲! 👋\n\n𝖳𝗁𝗂𝗌 𝗂𝗌 {0} ♪ 🎵\n\n![🎧](tg://emoji?id=5947042989145590769) <u><b>Ready to stream high-quality music in your voice chat.</b></u>"
     "start_settings": "<u><b>{0} settings</b></u>\n\nClick the buttons below to change this chat's current settings.",
     "stats_fetching": "Fetching stats...",
     "stats_sudo": "\n\n<b>Modules:</b> {0}\n<b>Platform:</b> {1}\n<b>Ram usage:</b> <code>{2}MB | {3}GB</code>\n<b>CPU usage:</b> <code>{4}% ({5} cores)</code>\n<b>Storage:</b> <code>{6}GB | {7}GB</code>\n\n<b>Python:</b> <code>v{8}</code>\n<b>Pyrogram:</b> <code>v{9}</code>\n<b>PyTgCalls:</b> <code>v{10}</code>",
